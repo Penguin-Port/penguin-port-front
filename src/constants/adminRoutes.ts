@@ -1,0 +1,18 @@
+export const ADMIN_ROUTES = {
+  dashboard: '/admin/dashboard',
+  aiSales: '/admin/ai/sales',
+  aiTimeSales: '/admin/ai/time-sales',
+  aiInventory: '/admin/ai/inventory',
+  aiMenuTrends: '/admin/ai/menu-trends',
+  livePasses: '/admin/wifi/live-passes',
+  wifiPolicies: '/admin/wifi/policies',
+  rewardTiers: '/admin/rewards/daily-tiers',
+  rewardHistory: '/admin/rewards/history',
+  orders: '/admin/orders',
+  notifications: '/admin/notifications',
+  anomalies: '/admin/anomalies',
+  team: '/admin/team',
+  audit: '/admin/audit',
+  settings: '/admin/settings',
+  privacy: '/admin/privacy',
+} as const
