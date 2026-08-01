@@ -235,6 +235,13 @@ button {
   background: #ff315f;
 }
 
+.primary-button:disabled {
+  border-color: #d9d9de;
+  color: #9a9aa1;
+  background: #eeeeF1;
+  cursor: not-allowed;
+}
+
 .outline-button {
   border: 1px solid #222228;
   color: #111114;
@@ -261,6 +268,136 @@ button {
 
 .centered-screen h1 {
   margin: 20px 0 24px;
+}
+
+.confirm-button {
+  align-self: center;
+  min-width: 92px;
+  padding-inline: 22px;
+}
+
+.menu-screen {
+  padding-top: 38px;
+}
+
+.menu-card-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.menu-card {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #e7e7eb;
+  border-radius: 8px;
+  color: #111114;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-card.selected {
+  border-color: rgba(255, 49, 95, 0.4);
+  background: #fff8fa;
+}
+
+.menu-card.selected .menu-image-placeholder {
+  position: relative;
+}
+
+.menu-card.selected .menu-image-placeholder::after {
+  content: '✓';
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #fff;
+  background: #ff315f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.menu-image-placeholder {
+  width: 70px;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, #f1f1f3, #e6e6ea);
+}
+
+.menu-card-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.menu-card-copy strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.menu-card-copy small {
+  color: #8a8a91;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.menu-price {
+  color: #111114;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cart-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid #dedee4;
+  border-radius: 8px;
+  background: #fafafa;
+  text-align: left;
+}
+
+.cart-panel strong {
+  display: block;
+  margin-top: 6px;
+  color: #111114;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.cart-panel dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.cart-panel div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cart-panel dt {
+  color: #777780;
+  font-size: 13px;
+}
+
+.cart-panel dd {
+  margin: 0;
+  color: #111114;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .info-panel {
@@ -398,6 +535,27 @@ button {
   border-color: #ff315f;
 }
 
+.lookup-button {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 14px;
+  border: 1px solid #111114;
+  border-radius: 7px;
+  color: #111114;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lookup-button:disabled {
+  border-color: #d9d9de;
+  color: #9a9aa1;
+  background: #eeeeF1;
+  cursor: not-allowed;
+}
+
 .summary-label {
   color: #ff315f;
   font-size: 12px;
@@ -429,6 +587,86 @@ button {
   color: #8a8a91;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.pass-result-area {
+  display: grid;
+  margin-top: 18px;
+}
+
+.pass-preview-card.empty {
+  margin-top: 0;
+}
+
+.pass-list {
+  display: grid;
+  gap: 12px;
+}
+
+.pass-list-item {
+  width: 100%;
+  margin-top: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pass-list-item:focus-visible {
+  outline: 2px solid rgba(255, 49, 95, 0.28);
+  outline-offset: 2px;
+}
+
+.pass-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.status-pill.active {
+  color: #fff;
+  background: #111114;
+}
+
+.status-pill.expired {
+  color: #777780;
+  background: #ececf0;
+}
+
+.ticket-meta {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.ticket-meta div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ticket-meta dt {
+  color: #8a8a91;
+  font-size: 12px;
+}
+
+.ticket-meta dd {
+  margin: 0;
+  color: #111114;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
 }
 
 .menu-list {

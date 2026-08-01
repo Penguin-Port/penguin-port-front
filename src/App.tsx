@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-type Screen = 'home' | 'complete' | 'verify' | 'active' | 'lookup' | 'extend'
+type Screen = 'home' | 'menu' | 'complete' | 'verify' | 'active' | 'lookup' | 'extend'
 type CustomerType = 'guest' | 'member'
+type LookupPass = {
+  id: string
+  label: string
+  orderNo: string
+  purchasedAt: string
+  status: 'ACTIVE' | 'EXPIRED'
+  title: string
+  description: string
+}
 
 const pass = {
   brand: '펭귄포트',
@@ -10,14 +19,57 @@ const pass = {
   item: '아메리카노 1잔, 케이크 1개',
   amount: '8,500원',
   minutes: 120,
-  endsAt: '16:30',
 }
 
 const steps: { id: Screen; label: string }[] = [
   { id: 'home', label: '홈' },
-  { id: 'complete', label: '주문' },
+  { id: 'menu', label: '주문' },
   { id: 'verify', label: '인증' },
   { id: 'active', label: '이용 중' },
+]
+
+const menuItems = [
+  {
+    id: 'americano',
+    name: '아메리카노',
+    description: '기본 WiFi 이용권이 포함됩니다.',
+    price: 4500,
+  },
+  {
+    id: 'cake',
+    name: '케이크',
+    description: '함께 주문하면 리워드 적립에 가까워져요.',
+    price: 4000,
+  },
+  {
+    id: 'latte',
+    name: '카페라떼',
+    description: '부드러운 우유 베이스 메뉴입니다.',
+    price: 5200,
+  },
+]
+
+const lookupPhone = '01011111111'
+
+const guestPasses: LookupPass[] = [
+  {
+    id: 'pass-active',
+    label: '현재 이용 중',
+    orderNo: pass.orderNo,
+    purchasedAt: '2026.07.28 14:22',
+    status: 'ACTIVE',
+    title: `WiFi 이용권 ${pass.minutes}분`,
+    description: '현재 매장에서 이용 중인 이용권입니다.',
+  },
+  {
+    id: 'pass-expired',
+    label: '이전 구매',
+    orderNo: '20260721-0007',
+    purchasedAt: '2026.07.21 12:08',
+    status: 'EXPIRED',
+    title: 'WiFi 이용권 90분',
+    description: '이용이 종료된 이전 구매 이용권입니다.',
+  },
 ]
 
 function App() {
@@ -25,6 +77,19 @@ function App() {
   const [customerType, setCustomerType] = useState<CustomerType>('guest')
   const [secondsLeft, setSecondsLeft] = useState(6512)
   const [now, setNow] = useState(() => new Date())
+  const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
+  const [completedOrderItems, setCompletedOrderItems] = useState<typeof menuItems>([])
+
+  const selectedMenuItems = useMemo(
+    () => menuItems.filter((item) => selectedMenuIds.includes(item.id)),
+    [selectedMenuIds],
+  )
+  const completedOrderTotal = completedOrderItems.reduce(
+    (total, item) => total + item.price,
+    0,
+  )
+  const completedOrderLabel =
+    completedOrderItems.map((item) => `${item.name} 1개`).join(', ') || pass.item
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -40,9 +105,25 @@ function App() {
   const currentStep = getCurrentStep(screen)
 
   const handlePrimaryAction = () => {
-    if (screen === 'home') setScreen('complete')
+    if (screen === 'home') {
+      setSelectedMenuIds([])
+      setScreen('menu')
+    }
+    if (screen === 'menu') {
+      setCompletedOrderItems(selectedMenuItems)
+      setSelectedMenuIds([])
+      setScreen('complete')
+    }
     if (screen === 'complete') setScreen('verify')
     if (screen === 'verify') setScreen('active')
+  }
+
+  const handleStepChange = (nextScreen: Screen) => {
+    if (screen === 'menu' || nextScreen === 'menu') {
+      setSelectedMenuIds([])
+    }
+
+    setScreen(nextScreen)
   }
 
   return (
@@ -59,8 +140,29 @@ function App() {
               onLookup={() => setScreen('lookup')}
             />
           )}
+          {screen === 'menu' && (
+            <MenuScreen
+              selectedMenuIds={selectedMenuIds}
+              onBack={() => {
+                setSelectedMenuIds([])
+                setScreen('home')
+              }}
+              onCheckout={handlePrimaryAction}
+              onToggleMenu={(menuId) =>
+                setSelectedMenuIds((currentIds) =>
+                  currentIds.includes(menuId)
+                    ? currentIds.filter((id) => id !== menuId)
+                    : [...currentIds, menuId],
+                )
+              }
+            />
+          )}
           {screen === 'complete' && (
-            <CompleteScreen onPrimaryAction={handlePrimaryAction} />
+            <CompleteScreen
+              orderItemLabel={completedOrderLabel}
+              paymentAmount={completedOrderTotal || parseWon(pass.amount)}
+              onPrimaryAction={handlePrimaryAction}
+            />
           )}
           {screen === 'verify' && (
             <VerifyScreen onPrimaryAction={handlePrimaryAction} />
@@ -81,12 +183,15 @@ function App() {
           {screen === 'extend' && (
             <ExtendScreen
               onBack={() => setScreen('active')}
-              onOrder={() => setScreen('complete')}
+              onOrder={() => {
+                setSelectedMenuIds([])
+                setScreen('menu')
+              }}
             />
           )}
           <StepRail
             currentStep={currentStep}
-            onStepChange={(nextScreen) => setScreen(nextScreen)}
+            onStepChange={handleStepChange}
           />
         </div>
       </section>
@@ -97,6 +202,7 @@ function App() {
 function getCurrentStep(screen: Screen) {
   if (screen === 'lookup') return 0
   if (screen === 'extend') return 3
+  if (screen === 'complete') return 1
 
   return steps.findIndex((step) => step.id === screen)
 }
@@ -215,7 +321,94 @@ function HomeScreen({
   )
 }
 
-function CompleteScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
+function MenuScreen({
+  selectedMenuIds,
+  onBack,
+  onCheckout,
+  onToggleMenu,
+}: {
+  selectedMenuIds: string[]
+  onBack: () => void
+  onCheckout: () => void
+  onToggleMenu: (menuId: string) => void
+}) {
+  const cartItems = menuItems.filter((item) => selectedMenuIds.includes(item.id))
+  const totalAmount = cartItems.reduce((total, item) => total + item.price, 0)
+  const canCheckout = cartItems.length > 0
+
+  return (
+    <div className="screen menu-screen">
+      <div className="screen-heading">
+        <h1>메뉴 선택</h1>
+        <p>사진은 나중에 연결하고, 지금은 카드로 주문 흐름을 먼저 확인합니다.</p>
+      </div>
+
+      <div className="menu-card-grid" aria-label="메뉴 목록">
+        {menuItems.map((item) => {
+          const isSelected = selectedMenuIds.includes(item.id)
+
+          return (
+          <button
+            key={item.id}
+            type="button"
+            className={isSelected ? 'menu-card selected' : 'menu-card'}
+            aria-pressed={isSelected}
+            onClick={() => onToggleMenu(item.id)}
+          >
+            <span className="menu-image-placeholder" aria-hidden="true" />
+            <span className="menu-card-copy">
+              <strong>{item.name}</strong>
+              <small>{item.description}</small>
+            </span>
+            <span className="menu-price">{formatWon(item.price)}</span>
+          </button>
+          )
+        })}
+      </div>
+
+      <div className="cart-panel">
+        <div>
+          <span className="summary-label">장바구니</span>
+          <strong>메뉴 {cartItems.length}개</strong>
+        </div>
+        <dl>
+          <div>
+            <dt>결제금액</dt>
+            <dd>{formatWon(totalAmount)}</dd>
+          </div>
+          <div>
+            <dt>제공 이용시간</dt>
+            <dd>{pass.minutes}분</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="bottom-actions single">
+        <button
+          type="button"
+          className="primary-button"
+          disabled={!canCheckout}
+          onClick={onCheckout}
+        >
+          결제하기
+        </button>
+        <button type="button" className="link-button" onClick={onBack}>
+          처음으로
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CompleteScreen({
+  orderItemLabel,
+  paymentAmount,
+  onPrimaryAction,
+}: {
+  orderItemLabel: string
+  paymentAmount: number
+  onPrimaryAction: () => void
+}) {
   return (
     <div className="screen centered-screen">
       <div className="success-orb" aria-hidden="true">
@@ -225,8 +418,8 @@ function CompleteScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
       <InfoPanel
         rows={[
           ['주문번호', pass.orderNo],
-          ['주문 내역', pass.item],
-          ['결제금액', pass.amount],
+          ['주문 내역', orderItemLabel],
+          ['결제금액', formatWon(paymentAmount)],
         ]}
       />
       <div className="notice-card">
@@ -234,7 +427,11 @@ function CompleteScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
         <span>이용 가능 시간 {pass.minutes}분</span>
       </div>
       <div className="bottom-actions single">
-        <button type="button" className="primary-button" onClick={onPrimaryAction}>
+        <button
+          type="button"
+          className="primary-button confirm-button"
+          onClick={onPrimaryAction}
+        >
           확인
         </button>
       </div>
@@ -276,6 +473,10 @@ function ActiveScreen({
 }) {
   const timeLabel = useMemo(() => formatSeconds(secondsLeft), [secondsLeft])
   const currentTimeLabel = useMemo(() => formatClock(currentTime), [currentTime])
+  const endTimeLabel = useMemo(
+    () => formatClock(new Date(currentTime.getTime() + secondsLeft * 1000)),
+    [currentTime, secondsLeft],
+  )
 
   return (
     <div className="screen active-screen">
@@ -290,7 +491,7 @@ function ActiveScreen({
           <strong>{timeLabel}</strong>
         </div>
       </div>
-      <p className="end-time">종료 예정 시간 {pass.endsAt}</p>
+      <p className="end-time">종료 예정 시간 {endTimeLabel}</p>
       <div className="bottom-actions single">
         <button type="button" className="outline-button" onClick={onExtend}>
           이용 연장 / 추가 주문
@@ -308,33 +509,95 @@ function LookupScreen({
   onBack: () => void
   onConfirm: () => void
 }) {
+  const [phone, setPhone] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
+  const normalizedPhone = normalizeDigits(phone)
+  const passes = hasSearched && normalizedPhone === lookupPhone ? guestPasses : []
+  const activePass = passes.find((item) => item.status === 'ACTIVE')
+  const canSearch = normalizedPhone.length === 11
+
   return (
     <div className="screen form-screen">
       <div className="screen-heading">
         <h1>발급받은 이용권 확인</h1>
-        <p>주문번호 또는 전화번호로 이용권 상태를 확인할 수 있습니다.</p>
+        <p>비회원은 전화번호로 현재 이용권과 이전 구매 이용권을 확인할 수 있습니다.</p>
       </div>
 
       <div className="field-stack">
         <label>
-          <span>주문번호</span>
-          <input defaultValue={pass.orderNo} inputMode="numeric" />
-        </label>
-        <label>
           <span>전화번호</span>
-          <input placeholder="010-0000-0000" inputMode="tel" />
+          <input
+            value={phone}
+            maxLength={11}
+            placeholder="01011111111"
+            inputMode="numeric"
+            onChange={(event) => {
+              setPhone(normalizeDigits(event.target.value))
+              setHasSearched(false)
+            }}
+          />
         </label>
       </div>
 
-      <div className="pass-preview-card">
-        <span className="summary-label">확인된 이용권</span>
-        <strong>WiFi 이용권 {pass.minutes}분</strong>
-        <p>주문 확인이 완료되었습니다. 인증 후 바로 이용을 시작할 수 있습니다.</p>
+      <button
+        type="button"
+        className="lookup-button"
+        disabled={!canSearch}
+        onClick={() => setHasSearched(true)}
+      >
+        이용권 조회
+      </button>
+
+      <div className="pass-result-area" aria-live="polite">
+        {hasSearched && passes.length === 0 && (
+          <div className="pass-preview-card empty">
+            <span className="summary-label">조회 결과 없음</span>
+            <strong>확인된 이용권이 없습니다</strong>
+            <p>전화번호를 다시 확인해 주세요.</p>
+          </div>
+        )}
+
+        {passes.length > 0 && (
+          <div className="pass-list">
+            {passes.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="pass-preview-card pass-list-item"
+                onClick={item.status === 'ACTIVE' ? onConfirm : undefined}
+              >
+                <span className="pass-card-topline">
+                  <span className="summary-label">{item.label}</span>
+                  <span className={`status-pill ${item.status.toLowerCase()}`}>
+                    {item.status === 'ACTIVE' ? '이용 중' : '종료'}
+                  </span>
+                </span>
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                <dl className="ticket-meta">
+                  <div>
+                    <dt>주문번호</dt>
+                    <dd>{item.orderNo}</dd>
+                  </div>
+                  <div>
+                    <dt>구매일시</dt>
+                    <dd>{item.purchasedAt}</dd>
+                  </div>
+                </dl>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bottom-actions single">
-        <button type="button" className="primary-button" onClick={onConfirm}>
-          이용권으로 이동
+        <button
+          type="button"
+          className="primary-button"
+          disabled={!activePass}
+          onClick={onConfirm}
+        >
+          현재 이용권으로 이동
         </button>
         <button type="button" className="link-button" onClick={onBack}>
           처음으로
@@ -460,6 +723,14 @@ function formatSeconds(totalSeconds: number) {
     .join(':')
 }
 
+function formatWon(value: number) {
+  return `${value.toLocaleString('ko-KR')}원`
+}
+
+function parseWon(value: string) {
+  return Number(value.replace(/\D/g, ''))
+}
+
 function formatClock(date: Date) {
   return new Intl.DateTimeFormat('ko-KR', {
     hour: '2-digit',
@@ -467,6 +738,10 @@ function formatClock(date: Date) {
     second: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+function normalizeDigits(value: string) {
+  return value.replace(/\D/g, '')
 }
 
 export default App
