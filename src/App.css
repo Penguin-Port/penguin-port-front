@@ -342,6 +342,126 @@ button {
   margin-top: 76px;
 }
 
+.timer-block {
+  display: grid;
+  gap: 28px;
+}
+
+.timer-block .current-time {
+  font-size: 18px;
+}
+
+.form-screen {
+  padding-top: 46px;
+}
+
+.screen-heading {
+  text-align: center;
+}
+
+.screen-heading p {
+  margin: 12px auto 0;
+  color: #8a8a91;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.field-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 36px;
+}
+
+.field-stack label {
+  display: grid;
+  gap: 8px;
+  color: #777780;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.field-stack input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid #dedee4;
+  border-radius: 8px;
+  color: #111114;
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+}
+
+.field-stack input:focus {
+  outline: 2px solid rgba(255, 49, 95, 0.22);
+  border-color: #ff315f;
+}
+
+.summary-label {
+  color: #ff315f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pass-preview-card,
+.extension-card {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #e7e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  text-align: left;
+}
+
+.pass-preview-card strong,
+.extension-card strong {
+  display: block;
+  margin-top: 10px;
+  color: #111114;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.pass-preview-card p,
+.extension-card p {
+  margin: 8px 0 0;
+  color: #8a8a91;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.menu-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.menu-list button {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  border: 1px solid #e7e7eb;
+  border-radius: 8px;
+  color: #111114;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.menu-list span {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.menu-list strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
 .step-rail {
   position: absolute;
   left: 24px;

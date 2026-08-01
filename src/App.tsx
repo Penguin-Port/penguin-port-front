@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-type Screen = 'home' | 'complete' | 'verify' | 'active'
+type Screen = 'home' | 'complete' | 'verify' | 'active' | 'lookup' | 'extend'
 type CustomerType = 'guest' | 'member'
 
 const pass = {
@@ -24,18 +24,20 @@ function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [customerType, setCustomerType] = useState<CustomerType>('guest')
   const [secondsLeft, setSecondsLeft] = useState(6512)
+  const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
-    if (screen !== 'active') return
-
     const timer = window.setInterval(() => {
-      setSecondsLeft((seconds) => Math.max(0, seconds - 1))
+      setNow(new Date())
+      if (screen === 'active') {
+        setSecondsLeft((seconds) => Math.max(0, seconds - 1))
+      }
     }, 1000)
 
     return () => window.clearInterval(timer)
   }, [screen])
 
-  const currentStep = steps.findIndex((step) => step.id === screen)
+  const currentStep = getCurrentStep(screen)
 
   const handlePrimaryAction = () => {
     if (screen === 'home') setScreen('complete')
@@ -54,6 +56,7 @@ function App() {
               customerType={customerType}
               onCustomerTypeChange={setCustomerType}
               onPrimaryAction={handlePrimaryAction}
+              onLookup={() => setScreen('lookup')}
             />
           )}
           {screen === 'complete' && (
@@ -62,7 +65,25 @@ function App() {
           {screen === 'verify' && (
             <VerifyScreen onPrimaryAction={handlePrimaryAction} />
           )}
-          {screen === 'active' && <ActiveScreen secondsLeft={secondsLeft} />}
+          {screen === 'active' && (
+            <ActiveScreen
+              currentTime={now}
+              secondsLeft={secondsLeft}
+              onExtend={() => setScreen('extend')}
+            />
+          )}
+          {screen === 'lookup' && (
+            <LookupScreen
+              onBack={() => setScreen('home')}
+              onConfirm={() => setScreen('active')}
+            />
+          )}
+          {screen === 'extend' && (
+            <ExtendScreen
+              onBack={() => setScreen('active')}
+              onOrder={() => setScreen('complete')}
+            />
+          )}
           <StepRail
             currentStep={currentStep}
             onStepChange={(nextScreen) => setScreen(nextScreen)}
@@ -71,6 +92,13 @@ function App() {
       </section>
     </main>
   )
+}
+
+function getCurrentStep(screen: Screen) {
+  if (screen === 'lookup') return 0
+  if (screen === 'extend') return 3
+
+  return steps.findIndex((step) => step.id === screen)
 }
 
 function DesktopSummary({ currentStep }: { currentStep: number }) {
@@ -134,10 +162,12 @@ function HomeScreen({
   customerType,
   onCustomerTypeChange,
   onPrimaryAction,
+  onLookup,
 }: {
   customerType: CustomerType
   onCustomerTypeChange: (type: CustomerType) => void
   onPrimaryAction: () => void
+  onLookup: () => void
 }) {
   return (
     <div className="screen home-screen">
@@ -177,7 +207,7 @@ function HomeScreen({
         <button type="button" className="primary-button" onClick={onPrimaryAction}>
           주문하기
         </button>
-        <button type="button" className="link-button">
+        <button type="button" className="link-button" onClick={onLookup}>
           발급받은 이용권 확인
         </button>
       </div>
@@ -235,22 +265,123 @@ function VerifyScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
   )
 }
 
-function ActiveScreen({ secondsLeft }: { secondsLeft: number }) {
+function ActiveScreen({
+  currentTime,
+  secondsLeft,
+  onExtend,
+}: {
+  currentTime: Date
+  secondsLeft: number
+  onExtend: () => void
+}) {
   const timeLabel = useMemo(() => formatSeconds(secondsLeft), [secondsLeft])
+  const currentTimeLabel = useMemo(() => formatClock(currentTime), [currentTime])
 
   return (
     <div className="screen active-screen">
       <h1>WiFi 이용 중</h1>
       <div className="timer-block">
-        <span>남은 시간</span>
-        <strong>{timeLabel}</strong>
+        <div>
+          <span>현재 시간</span>
+          <strong className="current-time">{currentTimeLabel}</strong>
+        </div>
+        <div>
+          <span>남은 시간</span>
+          <strong>{timeLabel}</strong>
+        </div>
       </div>
       <p className="end-time">종료 예정 시간 {pass.endsAt}</p>
       <div className="bottom-actions single">
-        <button type="button" className="outline-button">
+        <button type="button" className="outline-button" onClick={onExtend}>
           이용 연장 / 추가 주문
         </button>
         <p className="helper-text">이용 종료 5분 전에 안내 메시지가 발송됩니다.</p>
+      </div>
+    </div>
+  )
+}
+
+function LookupScreen({
+  onBack,
+  onConfirm,
+}: {
+  onBack: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="screen form-screen">
+      <div className="screen-heading">
+        <h1>발급받은 이용권 확인</h1>
+        <p>주문번호 또는 전화번호로 이용권 상태를 확인할 수 있습니다.</p>
+      </div>
+
+      <div className="field-stack">
+        <label>
+          <span>주문번호</span>
+          <input defaultValue={pass.orderNo} inputMode="numeric" />
+        </label>
+        <label>
+          <span>전화번호</span>
+          <input placeholder="010-0000-0000" inputMode="tel" />
+        </label>
+      </div>
+
+      <div className="pass-preview-card">
+        <span className="summary-label">확인된 이용권</span>
+        <strong>WiFi 이용권 {pass.minutes}분</strong>
+        <p>주문 확인이 완료되었습니다. 인증 후 바로 이용을 시작할 수 있습니다.</p>
+      </div>
+
+      <div className="bottom-actions single">
+        <button type="button" className="primary-button" onClick={onConfirm}>
+          이용권으로 이동
+        </button>
+        <button type="button" className="link-button" onClick={onBack}>
+          처음으로
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ExtendScreen({
+  onBack,
+  onOrder,
+}: {
+  onBack: () => void
+  onOrder: () => void
+}) {
+  return (
+    <div className="screen form-screen">
+      <div className="screen-heading">
+        <h1>이용 연장 / 추가 주문</h1>
+        <p>추가 주문하면 WiFi 이용 시간이 자동으로 연장됩니다.</p>
+      </div>
+
+      <div className="extension-card">
+        <span className="summary-label">다음 리워드까지</span>
+        <strong>1,500원 남았어요</strong>
+        <p>케이크 또는 샷 추가를 주문하면 무료 사이즈업 혜택에 가까워집니다.</p>
+      </div>
+
+      <div className="menu-list" aria-label="추천 메뉴">
+        <button type="button">
+          <span>아메리카노 추가</span>
+          <strong>4,500원</strong>
+        </button>
+        <button type="button">
+          <span>케이크 세트</span>
+          <strong>6,800원</strong>
+        </button>
+      </div>
+
+      <div className="bottom-actions single">
+        <button type="button" className="primary-button" onClick={onOrder}>
+          추가 주문하기
+        </button>
+        <button type="button" className="link-button" onClick={onBack}>
+          이용 중 화면으로
+        </button>
       </div>
     </div>
   )
@@ -327,6 +458,15 @@ function formatSeconds(totalSeconds: number) {
   return [hours, minutes, seconds]
     .map((value) => value.toString().padStart(2, '0'))
     .join(':')
+}
+
+function formatClock(date: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date)
 }
 
 export default App
