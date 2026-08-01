@@ -244,6 +244,14 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .live-pass-toast strong { font-size: 11px; }
 .live-pass-toast p { margin: 5px 0 0; color: #858b96; font-size: 9px; }
 .live-pass-toast button { padding: 0; color: #9da2ac; border: 0; background: transparent; font-size: 17px; line-height: 1; cursor: pointer; }
+.api-feedback { max-width: 1380px; margin: 0 auto 14px; padding: 11px 14px; color: #3765d8; border: 1px solid #d7e3fb; border-radius: 10px; background: #f2f7ff; font-size: 10px; font-weight: 600; }
+.api-feedback.is-error { color: #b54757; border-color: #f1d0d6; background: #fff4f6; }
+.pass-actions { display: flex; gap: 6px; }
+.pass-actions button { min-width: 50px; height: 29px; padding: 0 9px; color: var(--ink); border: 1px solid #dfe1e5; border-radius: 999px; background: #fff; font-size: 9px; font-weight: 700; cursor: pointer; }
+.pass-actions button.danger { color: #d93650; }
+.pass-actions button:disabled, .time-sale-actions button:disabled { opacity: .55; cursor: wait; transform: none; }
+.live-passes-table .table-empty { height: 100px; color: #8c929d; text-align: center; font-weight: 500; }
+.empty-card { margin: 0; padding: 42px; color: #8c929d; border: 1px solid var(--line); border-radius: 15px; background: #fff; text-align: center; font-size: 11px; }
 
 /* Wi-Fi policies */
 .wifi-policies-heading { max-width: 1380px; margin: 0 auto 22px; }
