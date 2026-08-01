@@ -75,6 +75,8 @@ const guestPasses: LookupPass[] = [
 function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [customerType, setCustomerType] = useState<CustomerType>('guest')
+  const [guestPhone, setGuestPhone] = useState('')
+  const [memberName, setMemberName] = useState('')
   const [secondsLeft, setSecondsLeft] = useState(6512)
   const [now, setNow] = useState(() => new Date())
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
@@ -129,13 +131,19 @@ function App() {
   return (
     <main className="app-shell">
       <section className="customer-page" aria-label="펭귄포트 고객 포털">
-        <DesktopSummary currentStep={currentStep} />
+        <DesktopSummary />
         <div className="portal-stage">
-          <BrandMark compact={screen !== 'home'} />
+          <div className="portal-brand">
+            <BrandMark compact={screen !== 'home'} />
+          </div>
           {screen === 'home' && (
             <HomeScreen
               customerType={customerType}
+              guestPhone={guestPhone}
+              memberName={memberName}
               onCustomerTypeChange={setCustomerType}
+              onGuestPhoneChange={setGuestPhone}
+              onMemberLogin={setMemberName}
               onPrimaryAction={handlePrimaryAction}
               onLookup={() => setScreen('lookup')}
             />
@@ -207,42 +215,28 @@ function getCurrentStep(screen: Screen) {
   return steps.findIndex((step) => step.id === screen)
 }
 
-function DesktopSummary({ currentStep }: { currentStep: number }) {
+function DesktopSummary() {
   return (
-    <aside className="desktop-summary" aria-label="주문 및 이용권 요약">
+    <aside className="desktop-summary" aria-label="카페 프로모션 영역">
       <div>
         <BrandMark />
         <div className="desktop-copy">
-          <h2>주문 고객에게 WiFi 이용권을 제공합니다</h2>
-          <p>주문 확인부터 인증, 이용권 활성화까지 한 화면에서 이어집니다.</p>
+          <h2>카페 혜택과 소식을 한곳에서 확인하세요</h2>
+          <p>이 영역은 이후 매장 광고, 시즌 메뉴, 리워드 배너를 노출하는 자리로 사용할 수 있습니다.</p>
         </div>
       </div>
 
-      <div className="summary-card">
-        <span className="summary-label">주문 요약</span>
-        <InfoPanel
-          rows={[
-            ['주문번호', pass.orderNo],
-            ['주문 내역', pass.item],
-            ['결제금액', pass.amount],
-          ]}
-        />
+      <div className="ad-banner-card">
+        <span className="summary-label">COMING SOON</span>
+        <strong>광고 배너 영역</strong>
+        <p>오늘의 추천 메뉴, 쿠폰, 제휴 이벤트 이미지를 넣을 수 있습니다.</p>
       </div>
 
-      <div className="summary-card reward-card">
-        <span className="summary-label">제공 혜택</span>
-        <strong>WiFi 이용권 {pass.minutes}분</strong>
-        <p>추가 주문 시 이용 시간이 자동 연장되고 누적 리워드가 반영됩니다.</p>
+      <div className="ad-banner-card muted">
+        <span className="summary-label">WiFi PASS</span>
+        <strong>주문 고객 전용 이용권</strong>
+        <p>주문, 인증, 이용권 활성화 흐름은 오른쪽 포털 화면에서 이어집니다.</p>
       </div>
-
-      <ol className="desktop-steps">
-        {steps.map((step, index) => (
-          <li key={step.id} className={index <= currentStep ? 'done' : ''}>
-            <span>{index + 1}</span>
-            {step.label}
-          </li>
-        ))}
-      </ol>
     </aside>
   )
 }
@@ -266,20 +260,52 @@ function BrandMark({ compact }: { compact?: boolean }) {
 
 function HomeScreen({
   customerType,
+  guestPhone,
+  memberName,
   onCustomerTypeChange,
+  onGuestPhoneChange,
+  onMemberLogin,
   onPrimaryAction,
   onLookup,
 }: {
   customerType: CustomerType
+  guestPhone: string
+  memberName: string
   onCustomerTypeChange: (type: CustomerType) => void
+  onGuestPhoneChange: (phone: string) => void
+  onMemberLogin: (name: string) => void
   onPrimaryAction: () => void
   onLookup: () => void
 }) {
+  const [loginId, setLoginId] = useState('')
+  const [password, setPassword] = useState('')
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
+  const [signupName, setSignupName] = useState('')
+  const [signupId, setSignupId] = useState('')
+  const [signupPassword, setSignupPassword] = useState('')
+  const isGuest = customerType === 'guest'
+  const canContinueAsGuest = guestPhone.length === 11
+  const title = memberName
+    ? `${memberName}님!`
+    : isGuest
+      ? '비회원으로 WiFi 이용권을 받으세요'
+      : '회원으로 로그인하세요'
+  const description = memberName
+    ? '회원 혜택과 WiFi 이용권을 이어서 확인할 수 있습니다.'
+    : isGuest
+      ? '전화번호만 입력하면 주문과 이용권을 안전하게 연결합니다.'
+      : '아이디와 비밀번호를 입력하면 회원 혜택 화면으로 이어집니다.'
+  const canLogin = loginId.trim().length > 0 && password.trim().length > 0
+  const canSignup =
+    signupName.trim().length > 0 &&
+    signupId.trim().length > 0 &&
+    signupPassword.trim().length > 0
+
   return (
     <div className="screen home-screen">
       <div className="main-copy">
-        <h1>주문하고 무료 WiFi를 이용하세요</h1>
-        <p>결제와 동시에 WiFi 이용권이 자동 발급됩니다.</p>
+        <h1>{title}</h1>
+        <p>{description}</p>
       </div>
 
       <div className="customer-switch" aria-label="고객 유형 선택">
@@ -299,23 +325,138 @@ function HomeScreen({
         </button>
       </div>
 
-      <div className="bottom-actions">
-        <button type="button" className="coupon-card">
-          <span className="star" aria-hidden="true">
-            ☆
-          </span>
-          <span>
-            <strong>이용 시간을 모아 쿠폰 받기</strong>
-            <small>누적 이용 시간에 따라 할인 쿠폰이 자동 발급돼요.</small>
-          </span>
-          <span aria-hidden="true">›</span>
-        </button>
-        <button type="button" className="primary-button" onClick={onPrimaryAction}>
-          주문하기
-        </button>
-        <button type="button" className="link-button" onClick={onLookup}>
-          발급받은 이용권 확인
-        </button>
+      {isGuest && (
+        <div className="entry-panel">
+          <label>
+            <span>전화번호</span>
+            <input
+              value={guestPhone}
+              maxLength={11}
+              placeholder="01011111111"
+              inputMode="numeric"
+              onChange={(event) => onGuestPhoneChange(normalizeDigits(event.target.value))}
+            />
+          </label>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!canContinueAsGuest}
+            onClick={onPrimaryAction}
+          >
+            비회원으로 계속
+          </button>
+          <button type="button" className="link-button" onClick={onLookup}>
+            발급받은 이용권 확인
+          </button>
+        </div>
+      )}
+
+      {!isGuest && !memberName && authMode === 'login' && (
+        <form
+          className="entry-panel"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!canLogin) return
+            onMemberLogin(loginId.trim())
+          }}
+        >
+          <label>
+            <span>아이디</span>
+            <input
+              value={loginId}
+              placeholder="penguin"
+              onChange={(event) => setLoginId(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>비밀번호</span>
+            <input
+              value={password}
+              type="password"
+              placeholder="비밀번호"
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          <button type="submit" className="outline-button" disabled={!canLogin}>
+            로그인
+          </button>
+          <button
+            type="button"
+            className="link-button compact-link"
+            onClick={() => setAuthMode('signup')}
+          >
+            회원가입
+          </button>
+        </form>
+      )}
+
+      {!isGuest && !memberName && authMode === 'signup' && (
+        <form
+          className="entry-panel"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!canSignup) return
+            onMemberLogin(signupName.trim())
+          }}
+        >
+          <label>
+            <span>이름</span>
+            <input
+              value={signupName}
+              placeholder="펭귄"
+              onChange={(event) => setSignupName(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>아이디</span>
+            <input
+              value={signupId}
+              placeholder="penguin"
+              onChange={(event) => setSignupId(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>비밀번호</span>
+            <input
+              value={signupPassword}
+              type="password"
+              placeholder="비밀번호"
+              onChange={(event) => setSignupPassword(event.target.value)}
+            />
+          </label>
+          <button type="submit" className="primary-button" disabled={!canSignup}>
+            가입하기
+          </button>
+          <button
+            type="button"
+            className="link-button compact-link"
+            onClick={() => setAuthMode('login')}
+          >
+            로그인으로 돌아가기
+          </button>
+        </form>
+      )}
+
+      {!isGuest && memberName && (
+        <div className="entry-panel">
+          <div className="member-ready-card">
+            <span className="summary-label">로그인 완료</span>
+            <strong>{memberName}님으로 접속 중</strong>
+            <p>회원 혜택과 쿠폰 정보를 이어서 확인할 수 있습니다.</p>
+          </div>
+          <button type="button" className="primary-button" onClick={onPrimaryAction}>
+            회원으로 계속
+          </button>
+          <button type="button" className="link-button" onClick={() => onMemberLogin('')}>
+            다른 계정으로 로그인
+          </button>
+        </div>
+      )}
+
+      <div className="inline-ad-slot" aria-label="프로모션 배너">
+        <span className="summary-label">AD</span>
+        <strong>오늘의 카페 배너</strong>
+        <p>시즌 메뉴, 쿠폰, 제휴 이벤트 이미지를 이 영역에 넣을 수 있습니다.</p>
       </div>
     </div>
   )
