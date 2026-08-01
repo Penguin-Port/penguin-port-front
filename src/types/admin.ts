@@ -50,6 +50,7 @@ export interface TimeSaleRecommendation {
   timeRange: string
   status: TimeSaleStatus
   reasons: string[]
+  apiVersion?: number
 }
 
 export type InventoryRisk = 'high' | 'overstock' | 'low'

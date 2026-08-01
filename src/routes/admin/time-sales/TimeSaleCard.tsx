@@ -10,12 +10,19 @@ const STATUS_LABELS: Record<TimeSaleStatus, string> = {
 
 interface TimeSaleCardProps {
   recommendation: TimeSaleRecommendation
+  isPending: boolean
   onApprove: (id: string) => void
   onEdit: (id: string) => void
   onReject: (id: string) => void
 }
 
-export function TimeSaleCard({ recommendation, onApprove, onEdit, onReject }: TimeSaleCardProps) {
+export function TimeSaleCard({
+  recommendation,
+  isPending,
+  onApprove,
+  onEdit,
+  onReject,
+}: TimeSaleCardProps) {
   const isReview = recommendation.status === 'review'
 
   return (
@@ -36,9 +43,9 @@ export function TimeSaleCard({ recommendation, onApprove, onEdit, onReject }: Ti
 
       {isReview && (
         <div className="time-sale-actions">
-          <button className="approve" onClick={() => onApprove(recommendation.id)}>승인</button>
-          <button onClick={() => onEdit(recommendation.id)}>수정</button>
-          <button onClick={() => onReject(recommendation.id)}>거절</button>
+          <button className="approve" disabled={isPending} onClick={() => onApprove(recommendation.id)}>{isPending ? '처리 중' : '승인'}</button>
+          <button disabled={isPending} onClick={() => onEdit(recommendation.id)}>수정</button>
+          <button disabled={isPending} onClick={() => onReject(recommendation.id)}>거절</button>
         </div>
       )}
     </article>

@@ -1,9 +1,25 @@
 import { env } from '../config/env'
+import type { ApiEnvelope } from '../types/api'
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(
+    status: number,
+    body: unknown,
+  ) {
+    super(`API request failed: ${status}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = body
+  }
+}
 
 export async function apiRequest<T>(
   path: string,
   options?: RequestInit,
-): Promise<T> {
+): Promise<ApiEnvelope<T>> {
   const response = await fetch(`${env.apiBaseUrl}${path}`, {
     ...options,
     headers: {
@@ -13,8 +29,9 @@ export async function apiRequest<T>(
   })
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`)
+    const body = await response.json().catch(() => null)
+    throw new ApiError(response.status, body)
   }
 
-  return response.json() as Promise<T>
+  return response.json() as Promise<ApiEnvelope<T>>
 }
