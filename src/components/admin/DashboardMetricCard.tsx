@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { DashboardMetric } from '../../types/admin'
 
 interface DashboardMetricCardProps {
@@ -13,7 +14,7 @@ export function DashboardMetricCard({ metric }: DashboardMetricCardProps) {
         <strong>{metric.value}</strong>
         <small>{metric.detail}</small>
       </div>
-      <button aria-label={`${metric.label} 상세 보기`}>↗</button>
+      <Link to={metric.path} aria-label={`${metric.label} 상세 보기`}>↗</Link>
     </article>
   )
 }

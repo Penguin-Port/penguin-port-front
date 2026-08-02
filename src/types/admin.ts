@@ -20,10 +20,12 @@ export interface AdminNavigationItem {
 }
 
 export interface DashboardMetric {
+  id: 'active-passes' | 'sales' | 'rewards' | 'approvals'
   label: string
   value: string
   detail: string
   tone: 'blue' | 'green' | 'purple' | 'orange'
+  path: string
 }
 
 export interface DashboardActivity {
@@ -39,6 +41,7 @@ export interface DashboardApproval {
   type: string
   description: string
   count: number
+  path: string
 }
 
 export type TimeSaleStatus = 'review' | 'scheduled' | 'active' | 'ended' | 'rejected'
@@ -51,6 +54,10 @@ export interface TimeSaleRecommendation {
   status: TimeSaleStatus
   reasons: string[]
   apiVersion?: number
+  expectedEffect?: string
+  confidence?: number
+  createdAt?: string
+  recommendationType?: string
 }
 
 export type InventoryRisk = 'high' | 'overstock' | 'low'

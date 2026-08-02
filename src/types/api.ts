@@ -39,6 +39,7 @@ export interface AiRecommendationResponse {
   reason: string
   status: ApiRecommendationStatus
   version: number
+  createdAt?: string
 }
 
 export interface PromotionResponse {

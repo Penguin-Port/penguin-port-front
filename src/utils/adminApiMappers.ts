@@ -63,6 +63,7 @@ export function mapApiRecommendation(item: AiRecommendationResponse): TimeSaleRe
     ACCEPTED: 'scheduled',
     REJECTED: 'rejected',
   }
+  const confidence = Number(payload.confidence)
 
   return {
     id: item.recommendationId,
@@ -72,5 +73,9 @@ export function mapApiRecommendation(item: AiRecommendationResponse): TimeSaleRe
     status: statusMap[item.status],
     reasons: item.reason ? [item.reason] : ['AI 추천'],
     apiVersion: item.version,
+    expectedEffect: stringValue(payload.expectedEffect) || stringValue(payload.expectedImpact),
+    confidence: Number.isFinite(confidence) ? confidence : undefined,
+    createdAt: stringValue(payload.createdAt) || item.createdAt,
+    recommendationType: item.type,
   }
 }

@@ -8,6 +8,10 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     timeRange: '오후 2~4시',
     status: 'review',
     reasons: ['혼잡 ↓', '판매 ↓'],
+    expectedEffect: '한산 시간대 주문 전환율 18% 개선 예상',
+    confidence: 0.86,
+    createdAt: '2026-08-02T13:42:00+09:00',
+    recommendationType: 'TIME_SALE',
   },
   {
     id: 'time-sale-2',
@@ -16,6 +20,10 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     timeRange: '오후 8~9시',
     status: 'review',
     reasons: ['재고 ↑', '판매 ↓'],
+    expectedEffect: '당일 재고 소진율 14% 개선 예상',
+    confidence: 0.78,
+    createdAt: '2026-08-02T13:35:00+09:00',
+    recommendationType: 'TIME_SALE',
   },
   {
     id: 'time-sale-3',
@@ -24,6 +32,10 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     timeRange: '오전 10~11시',
     status: 'active',
     reasons: ['혼잡 ↓'],
+    expectedEffect: '오전 비혼잡 시간대 주문 증가',
+    confidence: 0.82,
+    createdAt: '2026-08-02T09:12:00+09:00',
+    recommendationType: 'TIME_SALE',
   },
   {
     id: 'time-sale-4',
@@ -32,5 +44,9 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     timeRange: '오후 5~6시',
     status: 'ended',
     reasons: ['재고 ↑'],
+    expectedEffect: '마감 전 잔여 재고 감소',
+    confidence: 0.74,
+    createdAt: '2026-08-01T16:40:00+09:00',
+    recommendationType: 'TIME_SALE',
   },
 ]

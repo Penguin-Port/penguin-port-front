@@ -69,6 +69,10 @@ async function authenticatedRequest<T>(
 }
 
 export const adminApi = {
+  logout() {
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+  },
+
   async getActivePasses(signal?: AbortSignal) {
     return authenticatedRequest<AdminPassResponse[]>('/admin/passes/active', { signal })
   },
