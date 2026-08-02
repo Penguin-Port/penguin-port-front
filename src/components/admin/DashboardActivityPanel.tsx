@@ -1,4 +1,6 @@
+import { Link } from 'react-router-dom'
 import { DASHBOARD_ACTIVITIES } from '../../constants/adminDashboard'
+import { ADMIN_ROUTES } from '../../constants/adminRoutes'
 
 export function DashboardActivityPanel() {
   return (
@@ -16,7 +18,7 @@ export function DashboardActivityPanel() {
           </div>
         ))}
       </div>
-      <button className="panel-link">전체 이벤트 보기 <span>→</span></button>
+      <Link className="panel-link" to={ADMIN_ROUTES.audit}>전체 이벤트 보기 <span>→</span></Link>
     </article>
   )
 }

@@ -14,6 +14,7 @@ interface TimeSaleCardProps {
   onApprove: (id: string) => void
   onEdit: (id: string) => void
   onReject: (id: string) => void
+  onOpenDetail: (id: string) => void
 }
 
 export function TimeSaleCard({
@@ -22,6 +23,7 @@ export function TimeSaleCard({
   onApprove,
   onEdit,
   onReject,
+  onOpenDetail,
 }: TimeSaleCardProps) {
   const isReview = recommendation.status === 'review'
 
@@ -39,6 +41,7 @@ export function TimeSaleCard({
           <span>적용 시간 · {recommendation.timeRange}</span>
           <span>할인율 · {recommendation.discountRate}%</span>
         </div>
+        <button className="time-sale-detail-trigger" onClick={() => onOpenDetail(recommendation.id)}>추천 상세 보기 <span>→</span></button>
       </div>
 
       {isReview && (

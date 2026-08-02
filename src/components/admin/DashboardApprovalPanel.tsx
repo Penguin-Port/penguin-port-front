@@ -1,29 +1,36 @@
 import { Link } from 'react-router-dom'
-import { DASHBOARD_APPROVALS } from '../../constants/adminDashboard'
 import { ADMIN_ROUTES } from '../../constants/adminRoutes'
+import type { DashboardApproval } from '../../types/admin'
 
-const APPROVAL_ROUTES: Record<string, string> = {
-  'approval-1': ADMIN_ROUTES.aiTimeSales,
-  'approval-2': ADMIN_ROUTES.aiInventory,
-  'approval-3': ADMIN_ROUTES.aiMenuTrends,
+interface DashboardApprovalPanelProps {
+  approvals: DashboardApproval[]
+  isLoading?: boolean
 }
 
-export function DashboardApprovalPanel() {
+export function DashboardApprovalPanel({ approvals, isLoading = false }: DashboardApprovalPanelProps) {
+  const totalCount = approvals.reduce((total, approval) => total + approval.count, 0)
+
   return (
-    <article className="panel approval-panel">
+    <article className="panel approval-panel" aria-busy={isLoading}>
       <div className="panel-heading">
         <div><span className="panel-kicker">ACTION NEEDED</span><h2>승인 대기</h2></div>
-        <span className="count-badge">6</span>
+        <span className="count-badge">{isLoading ? '…' : totalCount}</span>
       </div>
       <div className="approval-list">
-        {DASHBOARD_APPROVALS.map((approval) => (
-          <Link className="approval-row" key={approval.id} to={APPROVAL_ROUTES[approval.id]}>
-            <span><b>{approval.type}</b><small>{approval.description}</small></span>
-            <span className="approval-count">{approval.count}건 <i>→</i></span>
-          </Link>
-        ))}
+        {isLoading ? (
+          Array.from({ length: 3 }, (_, index) => <span className="approval-skeleton" key={index} />)
+        ) : approvals.length > 0 ? (
+          approvals.map((approval) => (
+            <Link className="approval-row" key={approval.id} to={approval.path}>
+              <span><b>{approval.type}</b><small>{approval.description}</small></span>
+              <span className="approval-count">{approval.count}건 <i>→</i></span>
+            </Link>
+          ))
+        ) : (
+          <p className="approval-empty">현재 승인 대기 중인 AI 추천이 없습니다.</p>
+        )}
       </div>
-      <button className="panel-link">모든 승인 항목 보기 <span>→</span></button>
+      <Link className="panel-link" to={approvals[0]?.path ?? ADMIN_ROUTES.aiTimeSales}>모든 승인 항목 보기 <span>→</span></Link>
     </article>
   )
 }

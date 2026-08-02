@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import {
   CONGESTION,
   HOURLY_REVENUE,
@@ -40,7 +41,7 @@ export function AdminSalesPage() {
             <span>AI 인사이트</span>
             <h2>{insight.title}</h2>
             <p>{insight.description}</p>
-            <button>{insight.action} <i>→</i></button>
+            <Link className="sales-insight-action" to={insight.path}>{insight.action} <i>→</i></Link>
           </article>
         ))}
       </section>
