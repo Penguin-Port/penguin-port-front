@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import '../../styles/customer.css'
 
-type Screen = 'home' | 'menu' | 'complete' | 'verify' | 'active' | 'lookup' | 'extend'
+type Screen =
+  | 'home'
+  | 'menu'
+  | 'complete'
+  | 'verify'
+  | 'active'
+  | 'lookup'
+  | 'extend'
+  | 'claimMissing'
 type CustomerType = 'guest' | 'member'
 
 type MenuItem = {
@@ -19,6 +28,15 @@ type LookupPass = {
   status: 'ACTIVE' | 'EXPIRED'
   title: string
   description: string
+}
+
+type PortalOrder = {
+  orderClaim: string
+  storeName: string
+  orderNo: string
+  items: string
+  paidAmount: number
+  providedMinutes: number
 }
 
 const pass = {
@@ -80,8 +98,23 @@ const guestPasses: LookupPass[] = [
   },
 ]
 
+const defaultPortalOrder: PortalOrder = {
+  orderClaim: 'mock-order-claim',
+  storeName: '펭귄 카페 MVP',
+  orderNo: pass.orderNo,
+  items: pass.item,
+  paidAmount: parseWon(pass.amount),
+  providedMinutes: pass.minutes,
+}
+
 export function CustomerPortalPage() {
-  const [screen, setScreen] = useState<Screen>('home')
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const orderClaim = searchParams.get('orderClaim')?.trim() ?? ''
+  const isConnectRoute = location.pathname === '/connect'
+  const [screen, setScreen] = useState<Screen>(() =>
+    isConnectRoute ? (orderClaim ? 'complete' : 'claimMissing') : 'home',
+  )
   const [customerType, setCustomerType] = useState<CustomerType>('guest')
   const [guestPhone, setGuestPhone] = useState('')
   const [memberName, setMemberName] = useState('')
@@ -90,6 +123,10 @@ export function CustomerPortalPage() {
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
   const [completedOrderItems, setCompletedOrderItems] = useState<MenuItem[]>([])
 
+  const portalOrder = useMemo(
+    () => createMockPortalOrder(orderClaim, completedOrderItems),
+    [completedOrderItems, orderClaim],
+  )
   const selectedMenuItems = useMemo(
     () => menuItems.filter((item) => selectedMenuIds.includes(item.id)),
     [selectedMenuIds],
@@ -100,6 +137,12 @@ export function CustomerPortalPage() {
   )
   const completedOrderLabel =
     completedOrderItems.map((item) => `${item.name} 1개`).join(', ') || pass.item
+
+  useEffect(() => {
+    if (!isConnectRoute) return
+
+    setScreen(orderClaim ? 'complete' : 'claimMissing')
+  }, [isConnectRoute, orderClaim])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -144,6 +187,7 @@ export function CustomerPortalPage() {
           <div className="portal-brand">
             <BrandMark compact={screen !== 'home'} />
           </div>
+          {screen === 'claimMissing' && <ClaimMissingScreen />}
           {screen === 'home' && (
             <HomeScreen
               customerType={customerType}
@@ -175,13 +219,14 @@ export function CustomerPortalPage() {
           )}
           {screen === 'complete' && (
             <CompleteScreen
+              portalOrder={portalOrder}
               orderItemLabel={completedOrderLabel}
               paymentAmount={completedOrderTotal || parseWon(pass.amount)}
               onPrimaryAction={handlePrimaryAction}
             />
           )}
           {screen === 'verify' && (
-            <VerifyScreen onPrimaryAction={handlePrimaryAction} />
+            <VerifyScreen portalOrder={portalOrder} onPrimaryAction={handlePrimaryAction} />
           )}
           {screen === 'active' && (
             <ActiveScreen
@@ -213,11 +258,45 @@ export function CustomerPortalPage() {
 }
 
 function getCurrentStep(screen: Screen) {
-  if (screen === 'lookup') return 0
+  if (screen === 'lookup' || screen === 'claimMissing') return 0
   if (screen === 'extend') return 3
   if (screen === 'complete') return 1
 
   return steps.findIndex((step) => step.id === screen)
+}
+
+function createMockPortalOrder(orderClaim: string, items: MenuItem[]): PortalOrder {
+  if (!orderClaim) return defaultPortalOrder
+
+  const paidAmount = items.reduce((total, item) => total + item.price, 0)
+  const orderItems = items.map((item) => `${item.name} 1개`).join(', ')
+
+  return {
+    ...defaultPortalOrder,
+    orderClaim,
+    orderNo: `QR-${orderClaim.slice(-6).toUpperCase().padStart(6, '0')}`,
+    items: orderItems || defaultPortalOrder.items,
+    paidAmount: paidAmount || defaultPortalOrder.paidAmount,
+  }
+}
+
+function ClaimMissingScreen() {
+  return (
+    <div className="screen centered-screen claim-missing-screen">
+      <div className="wifi-orb" aria-hidden="true">
+        <WifiIcon dark />
+      </div>
+      <h1>주문 QR을 다시 확인해주세요</h1>
+      <p className="claim-missing-copy">
+        이용권을 연결하려면 주문표 QR의 orderClaim 정보가 필요합니다.
+      </p>
+      <div className="notice-card warning">
+        <strong>QR 정보가 없습니다</strong>
+        <span>직원에게 주문표 QR을 다시 요청하거나, 새 QR로 접속해주세요.</span>
+      </div>
+      <p className="helper-text">예상 주소 형식: /connect?orderClaim=...</p>
+    </div>
+  )
 }
 
 function DesktopSummary() {
@@ -547,10 +626,12 @@ function MenuScreen({
 }
 
 function CompleteScreen({
+  portalOrder,
   orderItemLabel,
   paymentAmount,
   onPrimaryAction,
 }: {
+  portalOrder: PortalOrder
   orderItemLabel: string
   paymentAmount: number
   onPrimaryAction: () => void
@@ -561,16 +642,20 @@ function CompleteScreen({
         <CheckIcon />
       </div>
       <h1>주문이 완료되었습니다!</h1>
+      <div className="claim-meta">
+        <span>{portalOrder.storeName}</span>
+        <strong>QR 주문 연결 완료</strong>
+      </div>
       <InfoPanel
         rows={[
-          ['주문번호', pass.orderNo],
-          ['주문 내역', orderItemLabel],
-          ['결제금액', formatWon(paymentAmount)],
+          ['주문번호', portalOrder.orderNo],
+          ['주문 내역', orderItemLabel || portalOrder.items],
+          ['결제금액', formatWon(paymentAmount || portalOrder.paidAmount)],
         ]}
       />
       <div className="notice-card">
         <strong>WiFi 이용권이 발급되었습니다</strong>
-        <span>이용 가능 시간 {pass.minutes}분</span>
+        <span>이용 가능 시간 {portalOrder.providedMinutes}분</span>
       </div>
       <div className="bottom-actions single">
         <button
@@ -585,7 +670,13 @@ function CompleteScreen({
   )
 }
 
-function VerifyScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
+function VerifyScreen({
+  portalOrder,
+  onPrimaryAction,
+}: {
+  portalOrder: PortalOrder
+  onPrimaryAction: () => void
+}) {
   return (
     <div className="screen centered-screen">
       <h1>WiFi 인증</h1>
@@ -594,8 +685,8 @@ function VerifyScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
       </div>
       <InfoPanel
         rows={[
-          ['주문번호', pass.orderNo],
-          ['이용시간', `${pass.minutes}분`],
+          ['주문번호', portalOrder.orderNo],
+          ['이용시간', `${portalOrder.providedMinutes}분`],
         ]}
       />
       <div className="bottom-actions single">

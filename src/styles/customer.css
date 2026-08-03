@@ -99,6 +99,8 @@
 }
 
 .customer-portal .screen {
+  width: min(100%, 328px);
+  margin-inline: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -174,6 +176,7 @@
 }
 
 .customer-portal .bottom-actions {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -186,11 +189,17 @@
 
 .customer-portal .primary-button,
 .customer-portal .outline-button {
+  width: 100%;
   min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
   border-radius: 7px;
   font: inherit;
   font-size: 14px;
   font-weight: 800;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -215,6 +224,9 @@
 }
 
 .customer-portal .link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
   min-height: 32px;
   border: 0;
@@ -223,6 +235,7 @@
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -356,8 +369,7 @@
 
 .customer-portal .confirm-button {
   align-self: center;
-  min-width: 92px;
-  padding-inline: 22px;
+  width: 100%;
 }
 
 .customer-portal .menu-screen {
@@ -507,6 +519,11 @@
   background: #f6f6f7;
 }
 
+.customer-portal .notice-card.warning {
+  border: 1px solid #f0d7aa;
+  background: #fff8ea;
+}
+
 .customer-portal .notice-card strong {
   display: block;
   color: #111114;
@@ -517,6 +534,33 @@
 .customer-portal .notice-card span {
   display: block;
   margin-top: 6px;
+}
+
+.customer-portal .claim-meta {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 14px;
+  color: #8a8a91;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-portal .claim-meta strong {
+  color: #111114;
+  font-size: 14px;
+}
+
+.customer-portal .claim-missing-screen {
+  justify-content: center;
+  padding-top: 0;
+}
+
+.customer-portal .claim-missing-copy {
+  max-width: 280px;
+  margin: -10px auto 18px;
+  color: #8a8a91;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .customer-portal .active-screen {
