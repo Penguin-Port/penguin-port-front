@@ -1,111 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
+import { CheckIcon, WifiIcon, WifiSmallIcon } from './components/CustomerIcons'
+import { GuestOrderSummary } from './components/GuestOrderSummary'
+import { GuestOtpPanel } from './components/GuestOtpPanel'
+import {
+  createMockPortalOrder,
+  demoOtpCode,
+  guestPasses,
+  lookupPhone,
+  menuItems,
+  pass,
+  steps,
+} from './customerMock'
+import type {
+  CustomerType,
+  HomeScreenProps,
+  MenuItem,
+  PortalOrder,
+  Screen,
+} from './customerTypes'
 import '../../styles/customer.css'
-
-type Screen =
-  | 'home'
-  | 'menu'
-  | 'complete'
-  | 'verify'
-  | 'active'
-  | 'lookup'
-  | 'extend'
-  | 'claimMissing'
-type CustomerType = 'guest' | 'member'
-
-type MenuItem = {
-  id: string
-  name: string
-  description: string
-  price: number
-}
-
-type LookupPass = {
-  id: string
-  label: string
-  orderNo: string
-  purchasedAt: string
-  status: 'ACTIVE' | 'EXPIRED'
-  title: string
-  description: string
-}
-
-type PortalOrder = {
-  orderClaim: string
-  storeName: string
-  orderNo: string
-  items: string
-  paidAmount: number
-  providedMinutes: number
-}
-
-const pass = {
-  brand: '펭귄포트',
-  orderNo: '20260728-0012',
-  item: '아메리카노 1잔, 케이크 1개',
-  amount: '8,500원',
-  minutes: 120,
-}
-
-const steps: { id: Screen; label: string }[] = [
-  { id: 'home', label: '홈' },
-  { id: 'menu', label: '주문' },
-  { id: 'verify', label: '인증' },
-  { id: 'active', label: '이용 중' },
-]
-
-const menuItems: MenuItem[] = [
-  {
-    id: 'americano',
-    name: '아메리카노',
-    description: '기본 WiFi 이용권이 포함됩니다.',
-    price: 4500,
-  },
-  {
-    id: 'cake',
-    name: '케이크',
-    description: '함께 주문하면 리워드 적립에 가까워져요.',
-    price: 4000,
-  },
-  {
-    id: 'latte',
-    name: '카페라떼',
-    description: '부드러운 우유 베이스 메뉴입니다.',
-    price: 5200,
-  },
-]
-
-const lookupPhone = '01011111111'
-
-const guestPasses: LookupPass[] = [
-  {
-    id: 'pass-active',
-    label: '현재 이용 중',
-    orderNo: pass.orderNo,
-    purchasedAt: '2026.07.28 14:22',
-    status: 'ACTIVE',
-    title: `WiFi 이용권 ${pass.minutes}분`,
-    description: '현재 매장에서 이용 중인 이용권입니다.',
-  },
-  {
-    id: 'pass-expired',
-    label: '이전 구매',
-    orderNo: '20260721-0007',
-    purchasedAt: '2026.07.21 12:08',
-    status: 'EXPIRED',
-    title: 'WiFi 이용권 90분',
-    description: '이용이 종료된 이전 구매 이용권입니다.',
-  },
-]
-
-const defaultPortalOrder: PortalOrder = {
-  orderClaim: 'mock-order-claim',
-  storeName: '펭귄 카페 MVP',
-  orderNo: pass.orderNo,
-  items: pass.item,
-  paidAmount: parseWon(pass.amount),
-  providedMinutes: pass.minutes,
-}
 
 export function CustomerPortalPage() {
   const location = useLocation()
@@ -122,6 +36,7 @@ export function CustomerPortalPage() {
   const [now, setNow] = useState(() => new Date())
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
   const [completedOrderItems, setCompletedOrderItems] = useState<MenuItem[]>([])
+  const [portalSession, setPortalSession] = useState('')
 
   const portalOrder = useMemo(
     () => createMockPortalOrder(orderClaim, completedOrderItems),
@@ -159,6 +74,11 @@ export function CustomerPortalPage() {
 
   const handlePrimaryAction = () => {
     if (screen === 'home') {
+      if (isConnectRoute || portalSession) {
+        setScreen('active')
+        return
+      }
+
       setSelectedMenuIds([])
       setScreen('menu')
     }
@@ -167,8 +87,7 @@ export function CustomerPortalPage() {
       setSelectedMenuIds([])
       setScreen('complete')
     }
-    if (screen === 'complete') setScreen('verify')
-    if (screen === 'verify') setScreen('active')
+    if (screen === 'complete') setScreen('home')
   }
 
   const handleStepChange = (nextScreen: Screen) => {
@@ -177,6 +96,23 @@ export function CustomerPortalPage() {
     }
 
     setScreen(nextScreen)
+  }
+
+  const handleOtpVerified = () => {
+    const nextSession = `mock-portal-session-${portalOrder.orderClaim}`
+
+    // Mock boundary: replace this with POST /public/otp/confirm later.
+    setPortalSession(nextSession)
+    window.sessionStorage.setItem('portalSession', nextSession)
+
+    if (isConnectRoute) {
+      window.history.replaceState(null, '', location.pathname)
+    }
+  }
+
+  const handleOtpReset = () => {
+    setPortalSession('')
+    window.sessionStorage.removeItem('portalSession')
   }
 
   return (
@@ -193,9 +129,14 @@ export function CustomerPortalPage() {
               customerType={customerType}
               guestPhone={guestPhone}
               memberName={memberName}
+              portalSession={portalSession}
+              isConnectFlow={isConnectRoute}
+              portalOrder={portalOrder}
               onCustomerTypeChange={setCustomerType}
               onGuestPhoneChange={setGuestPhone}
               onMemberLogin={setMemberName}
+              onOtpReset={handleOtpReset}
+              onVerified={handleOtpVerified}
               onPrimaryAction={handlePrimaryAction}
               onLookup={() => setScreen('lookup')}
             />
@@ -224,9 +165,6 @@ export function CustomerPortalPage() {
               paymentAmount={completedOrderTotal || parseWon(pass.amount)}
               onPrimaryAction={handlePrimaryAction}
             />
-          )}
-          {screen === 'verify' && (
-            <VerifyScreen portalOrder={portalOrder} onPrimaryAction={handlePrimaryAction} />
           )}
           {screen === 'active' && (
             <ActiveScreen
@@ -263,21 +201,6 @@ function getCurrentStep(screen: Screen) {
   if (screen === 'complete') return 1
 
   return steps.findIndex((step) => step.id === screen)
-}
-
-function createMockPortalOrder(orderClaim: string, items: MenuItem[]): PortalOrder {
-  if (!orderClaim) return defaultPortalOrder
-
-  const paidAmount = items.reduce((total, item) => total + item.price, 0)
-  const orderItems = items.map((item) => `${item.name} 1개`).join(', ')
-
-  return {
-    ...defaultPortalOrder,
-    orderClaim,
-    orderNo: `QR-${orderClaim.slice(-6).toUpperCase().padStart(6, '0')}`,
-    items: orderItems || defaultPortalOrder.items,
-    paidAmount: paidAmount || defaultPortalOrder.paidAmount,
-  }
 }
 
 function ClaimMissingScreen() {
@@ -346,44 +269,90 @@ function HomeScreen({
   customerType,
   guestPhone,
   memberName,
+  portalSession,
+  isConnectFlow,
+  portalOrder,
   onCustomerTypeChange,
   onGuestPhoneChange,
   onMemberLogin,
+  onOtpReset,
+  onVerified,
   onPrimaryAction,
   onLookup,
-}: {
-  customerType: CustomerType
-  guestPhone: string
-  memberName: string
-  onCustomerTypeChange: (type: CustomerType) => void
-  onGuestPhoneChange: (phone: string) => void
-  onMemberLogin: (name: string) => void
-  onPrimaryAction: () => void
-  onLookup: () => void
-}) {
+}: HomeScreenProps) {
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [signupName, setSignupName] = useState('')
   const [signupId, setSignupId] = useState('')
   const [signupPassword, setSignupPassword] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [cooldownSeconds, setCooldownSeconds] = useState(0)
   const isGuest = customerType === 'guest'
-  const canContinueAsGuest = guestPhone.length === 11
-  const title = memberName
-    ? `${memberName}님!`
-    : isGuest
-      ? '비회원으로 WiFi 이용권을 받으세요'
-      : '회원으로 로그인하세요'
-  const description = memberName
-    ? '회원 혜택과 WiFi 이용권을 이어서 확인할 수 있습니다.'
-    : isGuest
-      ? '전화번호만 입력하면 주문과 이용권을 안전하게 연결합니다.'
-      : '아이디와 비밀번호를 입력하면 회원 혜택 화면으로 이어집니다.'
+  const canSendOtp = guestPhone.length === 11 && cooldownSeconds === 0
+  const canConfirmOtp = otpCode.length === 6
+  const hasGuestSession = otpVerified || Boolean(portalSession)
+  const canContinueAsGuest = guestPhone.length === 11 && hasGuestSession
+  const { title, description } = getHomeCopy({
+    isConnectFlow,
+    isGuest,
+    memberName,
+  })
   const canLogin = loginId.trim().length > 0 && password.trim().length > 0
   const canSignup =
     signupName.trim().length > 0 &&
     signupId.trim().length > 0 &&
     signupPassword.trim().length > 0
+
+  useEffect(() => {
+    if (cooldownSeconds === 0) return
+
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((seconds) => Math.max(0, seconds - 1))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [cooldownSeconds])
+
+  const handleGuestPhoneChange = (value: string) => {
+    onGuestPhoneChange(normalizeDigits(value))
+    setOtpSent(false)
+    setOtpVerified(false)
+    setErrorMessage('')
+    setOtpCode('')
+    onOtpReset()
+  }
+
+  const handleSendOtp = () => {
+    if (!canSendOtp) return
+
+    setOtpSent(true)
+    setOtpVerified(false)
+    setOtpCode('')
+    setErrorMessage('')
+    setCooldownSeconds(30)
+  }
+
+  const handleConfirmOtp = () => {
+    if (!canConfirmOtp) return
+
+    if (otpCode !== demoOtpCode) {
+      setErrorMessage('인증번호가 일치하지 않습니다. 데모 코드는 123456입니다.')
+      return
+    }
+
+    setErrorMessage('')
+    setOtpVerified(true)
+    onVerified()
+  }
+
+  const handleOtpCodeChange = (value: string) => {
+    setOtpCode(normalizeDigits(value))
+    setErrorMessage('')
+  }
 
   return (
     <div className="screen home-screen">
@@ -411,23 +380,28 @@ function HomeScreen({
 
       {isGuest && (
         <div className="entry-panel">
-          <label>
-            <span>전화번호</span>
-            <input
-              value={guestPhone}
-              maxLength={11}
-              placeholder="01011111111"
-              inputMode="numeric"
-              onChange={(event) => onGuestPhoneChange(normalizeDigits(event.target.value))}
-            />
-          </label>
+          {isConnectFlow && <GuestOrderSummary portalOrder={portalOrder} />}
+          <GuestOtpPanel
+            phone={guestPhone}
+            otpCode={otpCode}
+            otpSent={otpSent}
+            otpVerified={hasGuestSession}
+            errorMessage={errorMessage}
+            cooldownSeconds={cooldownSeconds}
+            canSendOtp={canSendOtp}
+            canConfirmOtp={canConfirmOtp}
+            onPhoneChange={handleGuestPhoneChange}
+            onSendOtp={handleSendOtp}
+            onOtpCodeChange={handleOtpCodeChange}
+            onConfirmOtp={handleConfirmOtp}
+          />
           <button
             type="button"
             className="primary-button"
             disabled={!canContinueAsGuest}
             onClick={onPrimaryAction}
           >
-            비회원으로 계속
+            {isConnectFlow ? 'WiFi 이용 시작' : '비회원으로 계속'}
           </button>
           <button type="button" className="link-button" onClick={onLookup}>
             발급받은 이용권 확인
@@ -544,6 +518,42 @@ function HomeScreen({
       </div>
     </div>
   )
+}
+
+function getHomeCopy({
+  isConnectFlow,
+  isGuest,
+  memberName,
+}: {
+  isConnectFlow: boolean
+  isGuest: boolean
+  memberName: string
+}) {
+  if (memberName) {
+    return {
+      title: `${memberName}님!`,
+      description: '회원 혜택과 WiFi 이용권을 이어서 확인할 수 있습니다.',
+    }
+  }
+
+  if (!isGuest) {
+    return {
+      title: '회원으로 로그인하세요',
+      description: '아이디와 비밀번호를 입력하면 회원 혜택 화면으로 이어집니다.',
+    }
+  }
+
+  if (isConnectFlow) {
+    return {
+      title: '전화번호 인증 후 WiFi를 시작하세요',
+      description: '주문 시 입력한 전화번호로 이용권을 안전하게 연결합니다.',
+    }
+  }
+
+  return {
+    title: '비회원으로 WiFi 이용권을 받으세요',
+    description: '전화번호만 입력하면 주문과 이용권을 안전하게 연결합니다.',
+  }
 }
 
 function MenuScreen({
@@ -665,35 +675,6 @@ function CompleteScreen({
         >
           확인
         </button>
-      </div>
-    </div>
-  )
-}
-
-function VerifyScreen({
-  portalOrder,
-  onPrimaryAction,
-}: {
-  portalOrder: PortalOrder
-  onPrimaryAction: () => void
-}) {
-  return (
-    <div className="screen centered-screen">
-      <h1>WiFi 인증</h1>
-      <div className="wifi-orb" aria-hidden="true">
-        <WifiIcon dark />
-      </div>
-      <InfoPanel
-        rows={[
-          ['주문번호', portalOrder.orderNo],
-          ['이용시간', `${portalOrder.providedMinutes}분`],
-        ]}
-      />
-      <div className="bottom-actions single">
-        <button type="button" className="primary-button" onClick={onPrimaryAction}>
-          WiFi 이용 시작
-        </button>
-        <p className="helper-text">이 버튼을 누르면 WiFi 연결이 완료됩니다.</p>
       </div>
     </div>
   )
@@ -911,7 +892,7 @@ function StepRail({
     <nav className="step-rail" aria-label="화면 이동">
       {steps.map((step, index) => (
         <button
-          key={step.id}
+          key={step.key}
           type="button"
           className={index === currentStep ? 'active' : ''}
           onClick={() => onStepChange(step.id)}
@@ -920,33 +901,6 @@ function StepRail({
         </button>
       ))}
     </nav>
-  )
-}
-
-function WifiIcon({ dark }: { dark?: boolean }) {
-  return (
-    <svg viewBox="0 0 48 48" role="img" aria-label="WiFi">
-      <path
-        className={dark ? 'icon-dark' : ''}
-        d="M24 34.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0-11.5c5.4 0 10.4 2.2 14 5.7l-4.3 4.3A13.7 13.7 0 0 0 24 29a13.7 13.7 0 0 0-9.7 4l-4.3-4.3A19.8 19.8 0 0 1 24 23Zm0-11.5c8.6 0 16.4 3.5 22 9.1l-4.3 4.3A24.8 24.8 0 0 0 24 17.5a24.8 24.8 0 0 0-17.7 7.4L2 20.6a31 31 0 0 1 22-9.1Z"
-      />
-    </svg>
-  )
-}
-
-function WifiSmallIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 17.7a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Zm0-5.1c2.3 0 4.4.9 5.9 2.4l-2 2a5.5 5.5 0 0 0-7.8 0l-2-2a8.3 8.3 0 0 1 5.9-2.4Zm0-5.2c3.7 0 7 1.5 9.4 3.9l-2 2A10.5 10.5 0 0 0 12 10.2a10.5 10.5 0 0 0-7.4 3.1l-2-2A13.2 13.2 0 0 1 12 7.4Z" />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 48 48" role="img" aria-label="완료">
-      <path d="m19.8 31.1-7-7 2.8-2.8 4.2 4.2L32.4 13l2.8 2.8-15.4 15.3Z" />
-    </svg>
   )
 }
 
