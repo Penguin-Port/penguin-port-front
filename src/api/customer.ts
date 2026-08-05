@@ -4,55 +4,113 @@ export interface OrderClaimExchangeRequest {
   orderClaim: string
 }
 
+export interface CustomerOrderItem {
+  productId: string
+  name: string
+  quantity: number
+  unitPrice: number
+  lineAmount: number
+}
+
 export interface OrderClaimExchangeResponse {
-  passId?: string
+  verificationTicket: string
+  requiresVerification: boolean
+  passId: string | null
+  expiresIn: number
+  storeName: string
   orderNo: string
-  storeName?: string
+  items: CustomerOrderItem[]
+  paidAmount: number
   providedMinutes: number
-  phoneMasked?: string
-  status?: 'PENDING' | 'ACTIVE' | 'EXPIRED'
 }
 
 export interface OtpSendRequest {
-  passId: string
+  verificationTicket: string
   phone: string
 }
 
 export interface OtpSendResponse {
-  cooldownSeconds: number
-  phoneMasked: string
+  challengeId: string
+  expiresAt: string
+  maxAttempts: number
+  demoCode: string
 }
 
 export interface OtpConfirmRequest {
-  passId: string
+  challengeId: string
   code: string
 }
 
 export interface OtpConfirmResponse {
-  sessionToken: string
-  passId: string
+  portalSession: string
+  passId: string | null
+  expiresIn: number
 }
 
-export type CustomerPassStatus = 'PENDING' | 'ACTIVE' | 'EXPIRED' | 'BLOCKED'
+export type CustomerPassStatus =
+  | 'ISSUED'
+  | 'ACTIVATING'
+  | 'ACTIVE'
+  | 'EXPIRING_SOON'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | 'BLOCKED'
+  | 'FAILED'
 
 export interface CustomerPass {
-  id: string
-  orderNo: string
+  passId: string
   status: CustomerPassStatus
-  serverTime: string
-  expiresAt: string | null
+  issuedAt: string
+  activatedAt: string | null
+  expiresAt: string
   remainingSeconds: number
+  version: number
+  policySnapshot: Record<string, unknown>
   dailyTotal?: number
-  remainingAmountToNextTier?: number
-  nextTierBenefitsPreview?: string[]
 }
 
-export type RewardChoice = 'IMMEDIATE' | 'COUPON_7D'
+export interface UpsellHintResponse {
+  dailyTotal: number
+  nextTierAmount: number | null
+  remainingAmountToNextTier: number
+}
+
+export type RewardFulfillMode = 'IMMEDIATE' | 'COUPON_7D'
+
+export interface RewardOption {
+  benefitId: string
+  type: string
+  title: string
+  payload: Record<string, unknown>
+  recommended: boolean
+}
+
+export interface RewardOptionsResponse {
+  grantId: string
+  tierAmount: number
+  status: string
+  options: RewardOption[]
+}
+
+export interface RewardChooseRequest {
+  benefitId: string
+  fulfillMode: RewardFulfillMode
+}
 
 export interface RewardChooseResponse {
   grantId: string
-  choice: RewardChoice
-  message: string
+  status: string
+  fulfillMode: RewardFulfillMode
+  benefit: Record<string, unknown>
+  coupon: {
+    couponId: string
+    status: string
+    expiresAt: string
+  } | null
+}
+
+function portalSessionHeaders(portalSession: string) {
+  return { 'X-Portal-Session': portalSession }
 }
 
 export const customerApi = {
@@ -77,24 +135,43 @@ export const customerApi = {
     })
   },
 
-  activatePass(passId: string, token: string) {
+  activatePass(passId: string, portalSession: string) {
     return apiRequest<CustomerPass>(`/public/passes/${passId}/activate`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: portalSessionHeaders(portalSession),
     })
   },
 
-  getPass(passId: string, token: string) {
+  getPass(passId: string, portalSession: string) {
     return apiRequest<CustomerPass>(`/public/passes/${passId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: portalSessionHeaders(portalSession),
     })
   },
 
-  chooseReward(grantId: string, choice: RewardChoice, token: string) {
+  getUpsellHint(portalSession: string) {
+    return apiRequest<UpsellHintResponse>('/public/upsell-hint', {
+      headers: portalSessionHeaders(portalSession),
+    })
+  },
+
+  getRewardOptions(grantId: string, portalSession: string) {
+    return apiRequest<RewardOptionsResponse>(
+      `/public/rewards/grants/${grantId}/options`,
+      {
+        headers: portalSessionHeaders(portalSession),
+      },
+    )
+  },
+
+  chooseReward(
+    grantId: string,
+    body: RewardChooseRequest,
+    portalSession: string,
+  ) {
     return apiRequest<RewardChooseResponse>(`/public/rewards/${grantId}/choose`, {
       method: 'POST',
-      body: JSON.stringify({ choice }),
-      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+      headers: portalSessionHeaders(portalSession),
     })
   },
 }

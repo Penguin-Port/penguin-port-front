@@ -26,11 +26,19 @@ export type LookupPass = {
   description: string
 }
 
+export type PortalOrderItem = {
+  productId: string
+  name: string
+  quantity: number
+  unitPrice: number
+  lineAmount: number
+}
+
 export type PortalOrder = {
   orderClaim: string
   storeName: string
   orderNo: string
-  items: string
+  items: PortalOrderItem[]
   paidAmount: number
   providedMinutes: number
 }
@@ -46,7 +54,8 @@ export type HomeScreenProps = {
   onGuestPhoneChange: (phone: string) => void
   onMemberLogin: (name: string) => void
   onOtpReset: () => void
-  onVerified: () => void
+  onSendOtp: () => Promise<{ demoCode: string }>
+  onConfirmOtp: (code: string) => Promise<void>
   onPrimaryAction: () => void
   onLookup: () => void
 }
@@ -60,6 +69,8 @@ export type GuestOtpPanelProps = {
   cooldownSeconds: number
   canSendOtp: boolean
   canConfirmOtp: boolean
+  demoCode: string
+  isSubmitting: boolean
   onPhoneChange: (phone: string) => void
   onSendOtp: () => void
   onOtpCodeChange: (code: string) => void

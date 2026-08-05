@@ -5,18 +5,24 @@ import { GuestOrderSummary } from './components/GuestOrderSummary'
 import { GuestOtpPanel } from './components/GuestOtpPanel'
 import {
   createMockPortalOrder,
-  demoOtpCode,
   guestPasses,
   lookupPhone,
   menuItems,
   pass,
   steps,
 } from './customerMock'
+import {
+  activatePassMock,
+  confirmOtpMock,
+  exchangeOrderClaimMock,
+  sendOtpMock,
+} from './customerMockService'
 import type {
   CustomerType,
   HomeScreenProps,
   MenuItem,
   PortalOrder,
+  PortalOrderItem,
   Screen,
 } from './customerTypes'
 import '../../styles/customer.css'
@@ -37,6 +43,9 @@ export function CustomerPortalPage() {
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
   const [completedOrderItems, setCompletedOrderItems] = useState<MenuItem[]>([])
   const [portalSession, setPortalSession] = useState('')
+  const [verificationTicket, setVerificationTicket] = useState('')
+  const [challengeId, setChallengeId] = useState('')
+  const [passId, setPassId] = useState('')
 
   const portalOrder = useMemo(
     () => createMockPortalOrder(orderClaim, completedOrderItems),
@@ -51,13 +60,31 @@ export function CustomerPortalPage() {
     0,
   )
   const completedOrderLabel =
-    completedOrderItems.map((item) => `${item.name} 1개`).join(', ') || pass.item
+    completedOrderItems.map((item) => `${item.name} 1개`).join(', ') ||
+    formatPortalOrderItems(portalOrder.items)
 
   useEffect(() => {
     if (!isConnectRoute) return
 
     setScreen(orderClaim ? 'complete' : 'claimMissing')
   }, [isConnectRoute, orderClaim])
+
+  useEffect(() => {
+    if (!isConnectRoute || !orderClaim) return
+
+    let isCanceled = false
+
+    exchangeOrderClaimMock(orderClaim, completedOrderItems).then((response) => {
+      if (isCanceled) return
+
+      setVerificationTicket(response.verificationTicket)
+      setPassId(response.passId ?? '')
+    })
+
+    return () => {
+      isCanceled = true
+    }
+  }, [completedOrderItems, isConnectRoute, orderClaim])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -75,6 +102,12 @@ export function CustomerPortalPage() {
   const handlePrimaryAction = () => {
     if (screen === 'home') {
       if (isConnectRoute || portalSession) {
+        if (passId) {
+          activatePassMock(passId).then((response) => {
+            setSecondsLeft(response.remainingSeconds)
+          })
+        }
+
         setScreen('active')
         return
       }
@@ -98,12 +131,26 @@ export function CustomerPortalPage() {
     setScreen(nextScreen)
   }
 
-  const handleOtpVerified = () => {
-    const nextSession = `mock-portal-session-${portalOrder.orderClaim}`
+  const handleSendOtp = async () => {
+    if (isConnectRoute && !verificationTicket) {
+      throw new Error('주문 인증 정보를 먼저 확인해주세요.')
+    }
 
+    // Mock boundary: replace this with POST /public/otp/send later.
+    const response = await sendOtpMock()
+
+    setChallengeId(response.challengeId)
+
+    return { demoCode: response.demoCode }
+  }
+
+  const handleConfirmOtp = async (code: string) => {
     // Mock boundary: replace this with POST /public/otp/confirm later.
-    setPortalSession(nextSession)
-    window.sessionStorage.setItem('portalSession', nextSession)
+    const response = await confirmOtpMock(challengeId, code, passId || null)
+
+    setPortalSession(response.portalSession)
+    setPassId(response.passId ?? '')
+    window.sessionStorage.setItem('portalSession', response.portalSession)
 
     if (isConnectRoute) {
       window.history.replaceState(null, '', location.pathname)
@@ -136,7 +183,8 @@ export function CustomerPortalPage() {
               onGuestPhoneChange={setGuestPhone}
               onMemberLogin={setMemberName}
               onOtpReset={handleOtpReset}
-              onVerified={handleOtpVerified}
+              onSendOtp={handleSendOtp}
+              onConfirmOtp={handleConfirmOtp}
               onPrimaryAction={handlePrimaryAction}
               onLookup={() => setScreen('lookup')}
             />
@@ -276,7 +324,8 @@ function HomeScreen({
   onGuestPhoneChange,
   onMemberLogin,
   onOtpReset,
-  onVerified,
+  onSendOtp,
+  onConfirmOtp,
   onPrimaryAction,
   onLookup,
 }: HomeScreenProps) {
@@ -290,10 +339,13 @@ function HomeScreen({
   const [otpSent, setOtpSent] = useState(false)
   const [otpVerified, setOtpVerified] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [demoCode, setDemoCode] = useState('')
+  const [isOtpSubmitting, setIsOtpSubmitting] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
   const isGuest = customerType === 'guest'
-  const canSendOtp = guestPhone.length === 11 && cooldownSeconds === 0
-  const canConfirmOtp = otpCode.length === 6
+  const canSendOtp =
+    guestPhone.length === 11 && cooldownSeconds === 0 && !isOtpSubmitting
+  const canConfirmOtp = otpCode.length === 6 && !isOtpSubmitting
   const hasGuestSession = otpVerified || Boolean(portalSession)
   const canContinueAsGuest = guestPhone.length === 11 && hasGuestSession
   const { title, description } = getHomeCopy({
@@ -323,30 +375,46 @@ function HomeScreen({
     setOtpVerified(false)
     setErrorMessage('')
     setOtpCode('')
+    setDemoCode('')
     onOtpReset()
   }
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!canSendOtp) return
 
-    setOtpSent(true)
-    setOtpVerified(false)
-    setOtpCode('')
-    setErrorMessage('')
-    setCooldownSeconds(30)
+    try {
+      setIsOtpSubmitting(true)
+      setOtpVerified(false)
+      setOtpCode('')
+      setErrorMessage('')
+
+      const response = await onSendOtp()
+
+      setDemoCode(response.demoCode)
+      setOtpSent(true)
+      setCooldownSeconds(30)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsOtpSubmitting(false)
+    }
   }
 
-  const handleConfirmOtp = () => {
+  const handleConfirmOtp = async () => {
     if (!canConfirmOtp) return
 
-    if (otpCode !== demoOtpCode) {
-      setErrorMessage('인증번호가 일치하지 않습니다. 데모 코드는 123456입니다.')
-      return
-    }
+    try {
+      setIsOtpSubmitting(true)
+      setErrorMessage('')
 
-    setErrorMessage('')
-    setOtpVerified(true)
-    onVerified()
+      await onConfirmOtp(otpCode)
+
+      setOtpVerified(true)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsOtpSubmitting(false)
+    }
   }
 
   const handleOtpCodeChange = (value: string) => {
@@ -390,6 +458,8 @@ function HomeScreen({
             cooldownSeconds={cooldownSeconds}
             canSendOtp={canSendOtp}
             canConfirmOtp={canConfirmOtp}
+            demoCode={demoCode}
+            isSubmitting={isOtpSubmitting}
             onPhoneChange={handleGuestPhoneChange}
             onSendOtp={handleSendOtp}
             onOtpCodeChange={handleOtpCodeChange}
@@ -659,7 +729,7 @@ function CompleteScreen({
       <InfoPanel
         rows={[
           ['주문번호', portalOrder.orderNo],
-          ['주문 내역', orderItemLabel || portalOrder.items],
+          ['주문 내역', orderItemLabel || formatPortalOrderItems(portalOrder.items)],
           ['결제금액', formatWon(paymentAmount || portalOrder.paidAmount)],
         ]}
       />
@@ -920,6 +990,14 @@ function formatWon(value: number) {
 
 function parseWon(value: string) {
   return Number(value.replace(/\D/g, ''))
+}
+
+function formatPortalOrderItems(items: PortalOrderItem[]) {
+  return items.map((item) => `${item.name} ${item.quantity}개`).join(', ')
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '요청 처리 중 문제가 발생했습니다.'
 }
 
 function formatClock(date: Date) {

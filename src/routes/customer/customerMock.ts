@@ -1,4 +1,10 @@
-import type { LookupPass, MenuItem, PortalOrder, Screen } from './customerTypes'
+import type {
+  LookupPass,
+  MenuItem,
+  PortalOrder,
+  PortalOrderItem,
+  Screen,
+} from './customerTypes'
 
 export const pass = {
   brand: '펭귄포트',
@@ -43,7 +49,22 @@ export const defaultPortalOrder: PortalOrder = {
   orderClaim: 'mock-order-claim',
   storeName: '펭귄 카페 MVP',
   orderNo: pass.orderNo,
-  items: pass.item,
+  items: [
+    {
+      productId: 'americano',
+      name: '아메리카노',
+      quantity: 1,
+      unitPrice: 4500,
+      lineAmount: 4500,
+    },
+    {
+      productId: 'cake',
+      name: '케이크',
+      quantity: 1,
+      unitPrice: 4000,
+      lineAmount: 4000,
+    },
+  ],
   paidAmount: parseWon(pass.amount),
   providedMinutes: pass.minutes,
 }
@@ -77,15 +98,25 @@ export function createMockPortalOrder(
 
   // Mock boundary: exchange(orderClaim) should return these display fields.
   const paidAmount = items.reduce((total, item) => total + item.price, 0)
-  const orderItems = items.map((item) => `${item.name} 1개`).join(', ')
+  const orderItems = toPortalOrderItems(items)
 
   return {
     ...defaultPortalOrder,
     orderClaim,
     orderNo: `QR-${orderClaim.slice(-6).toUpperCase().padStart(6, '0')}`,
-    items: orderItems || defaultPortalOrder.items,
+    items: orderItems.length > 0 ? orderItems : defaultPortalOrder.items,
     paidAmount: paidAmount || defaultPortalOrder.paidAmount,
   }
+}
+
+function toPortalOrderItems(items: MenuItem[]): PortalOrderItem[] {
+  return items.map((item) => ({
+    productId: item.id,
+    name: item.name,
+    quantity: 1,
+    unitPrice: item.price,
+    lineAmount: item.price,
+  }))
 }
 
 function parseWon(value: string) {

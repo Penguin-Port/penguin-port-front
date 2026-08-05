@@ -1,4 +1,3 @@
-import { demoOtpCode } from '../customerMock'
 import type { GuestOtpPanelProps } from '../customerTypes'
 
 export function GuestOtpPanel({
@@ -10,6 +9,8 @@ export function GuestOtpPanel({
   cooldownSeconds,
   canSendOtp,
   canConfirmOtp,
+  demoCode,
+  isSubmitting,
   onPhoneChange,
   onSendOtp,
   onOtpCodeChange,
@@ -34,17 +35,21 @@ export function GuestOtpPanel({
         disabled={!canSendOtp || otpVerified}
         onClick={onSendOtp}
       >
-        {cooldownSeconds > 0 ? `재전송 ${cooldownSeconds}초` : '인증번호 발송'}
+        {isSubmitting
+          ? '발송 중'
+          : cooldownSeconds > 0
+            ? `재전송 ${cooldownSeconds}초`
+            : '인증번호 발송'}
       </button>
       {otpSent && (
         <label>
           <span>인증번호 6자리</span>
           <input
-            value={otpCode}
-            maxLength={6}
-            placeholder={demoOtpCode}
-            inputMode="numeric"
-            disabled={otpVerified}
+          value={otpCode}
+          maxLength={6}
+          placeholder={demoCode || '123456'}
+          inputMode="numeric"
+          disabled={otpVerified}
             aria-invalid={Boolean(errorMessage)}
             aria-describedby={errorMessage ? 'guest-otp-error-message' : undefined}
             onChange={(event) => onOtpCodeChange(event.target.value)}
@@ -56,9 +61,9 @@ export function GuestOtpPanel({
           type="button"
           className="primary-button"
           disabled={!canConfirmOtp}
-          onClick={onConfirmOtp}
-        >
-          인증번호 확인
+        onClick={onConfirmOtp}
+      >
+          {isSubmitting ? '확인 중' : '인증번호 확인'}
         </button>
       )}
       {errorMessage && (
@@ -67,7 +72,7 @@ export function GuestOtpPanel({
         </p>
       )}
       {otpSent && !errorMessage && !otpVerified && (
-        <p className="otp-message">데모 인증번호는 {demoOtpCode}입니다.</p>
+        <p className="otp-message">데모 인증번호는 {demoCode || '123456'}입니다.</p>
       )}
       {otpVerified && (
         <div className="notice-card success">
