@@ -662,7 +662,7 @@
 .customer-portal .timer-block {
   display: grid;
   gap: 28px;
-  margin-top: 124px;
+  margin-top: 64px;
 }
 
 .customer-portal .timer-block span {
@@ -686,6 +686,40 @@
 
 .customer-portal .end-time {
   margin-top: 76px;
+}
+
+.customer-portal .active-pass-meta {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #e7e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.customer-portal .active-pass-meta div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.customer-portal .active-pass-meta dt {
+  color: #777780;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-portal .active-pass-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: #111114;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .customer-portal .form-screen {
@@ -756,7 +790,21 @@
   background: #111114;
 }
 
-.customer-portal .status-pill.expired {
+.customer-portal .status-pill.issued,
+.customer-portal .status-pill.activating {
+  color: #111114;
+  background: #ececf0;
+}
+
+.customer-portal .status-pill.expiring_soon {
+  color: #8a4d00;
+  background: #fff2d8;
+}
+
+.customer-portal .status-pill.expired,
+.customer-portal .status-pill.cancelled,
+.customer-portal .status-pill.blocked,
+.customer-portal .status-pill.failed {
   color: #777780;
   background: #ececf0;
 }

@@ -25,6 +25,7 @@ import type {
   PortalOrderItem,
   Screen,
 } from './customerTypes'
+import type { CustomerPass, CustomerPassStatus } from '../../api/customer'
 import '../../styles/customer.css'
 
 export function CustomerPortalPage() {
@@ -46,6 +47,7 @@ export function CustomerPortalPage() {
   const [verificationTicket, setVerificationTicket] = useState('')
   const [challengeId, setChallengeId] = useState('')
   const [passId, setPassId] = useState('')
+  const [activePass, setActivePass] = useState<CustomerPass | null>(null)
 
   const portalOrder = useMemo(
     () => createMockPortalOrder(orderClaim, completedOrderItems),
@@ -104,6 +106,7 @@ export function CustomerPortalPage() {
       if (isConnectRoute || portalSession) {
         if (passId) {
           activatePassMock(passId).then((response) => {
+            setActivePass(response)
             setSecondsLeft(response.remainingSeconds)
           })
         }
@@ -216,6 +219,7 @@ export function CustomerPortalPage() {
           )}
           {screen === 'active' && (
             <ActiveScreen
+              pass={activePass}
               currentTime={now}
               secondsLeft={secondsLeft}
               onExtend={() => setScreen('extend')}
@@ -751,10 +755,12 @@ function CompleteScreen({
 }
 
 function ActiveScreen({
+  pass,
   currentTime,
   secondsLeft,
   onExtend,
 }: {
+  pass: CustomerPass | null
   currentTime: Date
   secondsLeft: number
   onExtend: () => void
@@ -762,13 +768,31 @@ function ActiveScreen({
   const timeLabel = useMemo(() => formatSeconds(secondsLeft), [secondsLeft])
   const currentTimeLabel = useMemo(() => formatClock(currentTime), [currentTime])
   const endTimeLabel = useMemo(
-    () => formatClock(new Date(currentTime.getTime() + secondsLeft * 1000)),
-    [currentTime, secondsLeft],
+    () => formatClock(pass ? new Date(pass.expiresAt) : currentTime),
+    [currentTime, pass],
   )
+  const status = getEffectivePassStatus(pass?.status ?? 'ACTIVE', secondsLeft)
+  const isExpired = status === 'EXPIRED'
+  const isExpiringSoon = status === 'EXPIRING_SOON'
 
   return (
     <div className="screen active-screen">
-      <h1>WiFi 이용 중</h1>
+      <span className={`status-pill ${status.toLowerCase()}`}>
+        {getPassStatusLabel(status)}
+      </span>
+      <h1>{isExpired ? 'WiFi 이용이 종료되었습니다' : 'WiFi 이용 중'}</h1>
+      {pass && (
+        <dl className="active-pass-meta">
+          <div>
+            <dt>이용권</dt>
+            <dd>{pass.passId}</dd>
+          </div>
+          <div>
+            <dt>버전</dt>
+            <dd>{pass.version}</dd>
+          </div>
+        </dl>
+      )}
       <div className="timer-block">
         <div>
           <span>현재 시간</span>
@@ -780,11 +804,32 @@ function ActiveScreen({
         </div>
       </div>
       <p className="end-time">종료 예정 시간 {endTimeLabel}</p>
+      {isExpiringSoon && (
+        <div className="notice-card warning">
+          <strong>이용 종료가 가까워졌습니다</strong>
+          <span>추가 주문을 하면 WiFi 이용 시간이 자동으로 연장됩니다.</span>
+        </div>
+      )}
+      {isExpired && (
+        <div className="notice-card warning">
+          <strong>이용권이 만료되었습니다</strong>
+          <span>추가 주문 또는 직원 문의로 새 이용권을 발급받을 수 있습니다.</span>
+        </div>
+      )}
       <div className="bottom-actions single">
-        <button type="button" className="outline-button" onClick={onExtend}>
+        <button
+          type="button"
+          className="outline-button"
+          disabled={isExpired}
+          onClick={onExtend}
+        >
           이용 연장 / 추가 주문
         </button>
-        <p className="helper-text">이용 종료 5분 전에 안내 메시지가 발송됩니다.</p>
+        <p className="helper-text">
+          {isExpired
+            ? '만료된 이용권은 다시 활성화할 수 없습니다.'
+            : '이용 종료 5분 전에 안내 메시지가 발송됩니다.'}
+        </p>
       </div>
     </div>
   )
@@ -998,6 +1043,31 @@ function formatPortalOrderItems(items: PortalOrderItem[]) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '요청 처리 중 문제가 발생했습니다.'
+}
+
+function getEffectivePassStatus(
+  status: CustomerPassStatus,
+  secondsLeft: number,
+): CustomerPassStatus {
+  if (secondsLeft <= 0) return 'EXPIRED'
+  if (status === 'ACTIVE' && secondsLeft <= 5 * 60) return 'EXPIRING_SOON'
+
+  return status
+}
+
+function getPassStatusLabel(status: CustomerPassStatus) {
+  const labels: Record<CustomerPassStatus, string> = {
+    ISSUED: '발급 완료',
+    ACTIVATING: '활성화 중',
+    ACTIVE: '이용 중',
+    EXPIRING_SOON: '종료 임박',
+    EXPIRED: '종료',
+    CANCELLED: '취소',
+    BLOCKED: '차단',
+    FAILED: '오류',
+  }
+
+  return labels[status]
 }
 
 function formatClock(date: Date) {
