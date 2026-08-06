@@ -4,18 +4,16 @@ import type {
   OtpConfirmResponse,
   OtpSendResponse,
 } from '../../api/customer'
-import { createMockPortalOrder, demoOtpCode } from './customerMock'
-import type { MenuItem } from './customerTypes'
+import { createMockPortalOrder, demoOtpCode, portalDemo } from './customerMock'
 
 const mockRequestDelay = 180
 
 export async function exchangeOrderClaimMock(
   orderClaim: string,
-  items: MenuItem[],
 ): Promise<OrderClaimExchangeResponse> {
   await delay(mockRequestDelay)
 
-  const portalOrder = createMockPortalOrder(orderClaim, items)
+  const portalOrder = createMockPortalOrder(orderClaim)
 
   return {
     verificationTicket: `mock-verification-ticket-${portalOrder.orderClaim}`,
@@ -63,7 +61,10 @@ export async function activatePassMock(passId: string): Promise<CustomerPass> {
   await delay(mockRequestDelay)
 
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + 120 * 60 * 1000)
+  const providedMinutes = portalDemo.baseMinutes + portalDemo.bonusMinutes
+  const expiresAt = new Date(
+    now.getTime() + providedMinutes * 60 * 1000,
+  )
 
   return {
     passId,
@@ -71,10 +72,13 @@ export async function activatePassMock(passId: string): Promise<CustomerPass> {
     issuedAt: now.toISOString(),
     activatedAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    remainingSeconds: 120 * 60,
+    remainingSeconds: providedMinutes * 60,
     version: 1,
-    policySnapshot: { baseMinutes: 120 },
-    dailyTotal: 8500,
+    policySnapshot: {
+      baseMinutes: portalDemo.baseMinutes,
+      bonusMinutes: portalDemo.bonusMinutes,
+    },
+    dailyTotal: portalDemo.dailyTotal,
   }
 }
 
