@@ -30,16 +30,39 @@ export interface AdminPassResponse {
   customerPhone?: string
 }
 
-export type ApiRecommendationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
+export type ApiRecommendationStatus = 'PENDING' | 'EDITED' | 'ACCEPTED' | 'REJECTED'
+
+export type ApiRecommendationType =
+  | 'TIME_SALE'
+  | 'SALES_SUMMARY'
+  | 'INVENTORY_PROMOTION'
+  | 'MENU_TREND'
 
 export interface AiRecommendationResponse {
   recommendationId: string
   type: string
   payload: Record<string, unknown>
   reason: string
+  evidence?: Record<string, unknown>
+  confidence?: number | null
   status: ApiRecommendationStatus
   version: number
   createdAt?: string
+  decidedAt?: string | null
+}
+
+export interface RecommendationPatchInput {
+  menuIds?: string[]
+  discountRate: number
+  startsAt: string
+  endsAt: string
+}
+
+export interface EditedRecommendationResponse {
+  recommendationId: string
+  payload: Record<string, unknown>
+  status: 'EDITED'
+  version: number
 }
 
 export interface PromotionResponse {

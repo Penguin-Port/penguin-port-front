@@ -217,9 +217,14 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .sales-summary small { margin-top: 5px; color: #a1a6af; font-size: 9px; }
 
 /* AI time sales */
-.time-sales-heading { max-width: 1380px; margin: 0 auto 22px; }
+.time-sales-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; max-width: 1380px; margin: 0 auto 22px; }
 .time-sales-heading h1 { margin-bottom: 8px; }
-.time-sales-heading > p:last-child { margin: 0; color: var(--muted); font-size: 12px; }
+.time-sales-heading > div > p:last-child { margin: 0; color: var(--muted); font-size: 12px; }
+.generate-recommendation-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 0 0 auto; min-width: 126px; height: 42px; padding: 0 17px; color: #fff; border: 0; border-radius: 999px; background: var(--ink); font-size: 11px; font-weight: 700; cursor: pointer; transition: transform .18s ease, opacity .18s ease; }
+.generate-recommendation-button:hover:not(:disabled) { transform: translateY(-1px); }
+.generate-recommendation-button:disabled { opacity: .5; cursor: not-allowed; }
+.button-spinner { width: 13px; height: 13px; border: 2px solid rgb(255 255 255 / 35%); border-top-color: #fff; border-radius: 50%; animation: button-spin .7s linear infinite; }
+@keyframes button-spin { to { transform: rotate(360deg); } }
 .auto-approve-panel { display: flex; align-items: center; gap: 13px; min-height: 75px; max-width: 1380px; margin: 0 auto 18px; padding: 18px 22px; border: 1px solid var(--line); border-radius: 15px; background: #fff; box-shadow: var(--shadow); }
 .auto-approve-panel strong { font-size: 12px; }
 .auto-approve-panel > span { color: #898f9a; font-size: 11px; }
@@ -232,10 +237,16 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .time-sale-copy { min-width: 0; }
 .time-sale-meta { display: flex; align-items: center; gap: 9px; color: #a0a5ae; font-size: 10px; }
 .time-sale-status { padding: 5px 9px; border-radius: 999px; color: #8c6510; background: #fff4bd; font: 700 9px 'DM Sans', sans-serif; }
+.time-sale-status.edited { color: #3765d8; background: #e5edff; }
 .time-sale-status.scheduled { color: #3858e9; background: #edf0ff; }
 .time-sale-status.active { color: #fff; background: var(--pink); }
 .time-sale-status.ended { color: #747984; background: #e9eaed; }
 .time-sale-status.rejected { color: #8b5560; background: #f5e8eb; }
+.recommendation-source { padding: 5px 9px; border-radius: 999px; color: #6f7580; background: #eef0f3; font: 700 9px 'DM Sans', 'Noto Sans KR', sans-serif; white-space: nowrap; }
+.recommendation-source.openai { color: #fff; background: linear-gradient(135deg, #12161d, #37404e); }
+.recommendation-source.fallback { color: #8c6510; background: #fff4bd; }
+.recommendation-source.seed { color: #3765d8; background: #e5edff; }
+.recommendation-source.demo { color: #7654b5; background: #f0e8ff; }
 .time-sale-card h2 { margin: 11px 0 7px; font-size: 18px; letter-spacing: -.5px; }
 .time-sale-details { display: flex; gap: 24px; color: #626873; font-size: 11px; }
 .time-sale-detail-trigger { margin-top: 13px; padding: 0; color: #5264ba; border: 0; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; }
@@ -246,7 +257,7 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .time-sale-actions button.approve { color: #fff; border-color: var(--ink); background: var(--ink); }
 .recommendation-detail { margin-top: 22px; }
 .recommendation-detail-highlight { display: grid; gap: 10px; padding: 16px; border-radius: 12px; background: #f6f7fa; }
-.recommendation-detail-highlight .time-sale-status { justify-self: start; }
+.recommendation-detail-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .recommendation-detail-highlight strong { font-size: 13px; line-height: 1.55; }
 .recommendation-detail dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; margin: 16px 0 0; }
 .recommendation-detail dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 43px; border-bottom: 1px solid #eceef1; }
@@ -256,6 +267,15 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .recommendation-detail .wide dd { max-width: 70%; line-height: 1.55; }
 .recommendation-detail-actions { margin-top: 20px; }
 .recommendation-detail-actions button.reject { color: #d93650; border-color: #efcbd2; }
+.recommendation-edit-form { display: grid; gap: 16px; margin-top: 22px; }
+.recommendation-edit-form label { display: grid; gap: 7px; color: #626873; font-size: 10px; font-weight: 700; }
+.recommendation-edit-form input, .recommendation-readonly-field { width: 100%; min-height: 43px; padding: 0 12px; color: var(--ink); border: 1px solid #dfe1e5; border-radius: 9px; background: #fff; font: 600 11px 'DM Sans', 'Noto Sans KR', sans-serif; }
+.recommendation-edit-form input:focus { border-color: #8d98bd; outline: 0; box-shadow: 0 0 0 3px #eef1ff; }
+.recommendation-edit-form input:disabled { color: #8b9099; background: #f5f6f8; }
+.recommendation-readonly-field { display: flex; align-items: center; color: #646a75; background: #f7f8fa; }
+.recommendation-edit-time-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.recommendation-edit-error { margin: -3px 0 0; color: #c93650; font-size: 10px; font-weight: 600; }
+.recommendation-edit-actions { margin-top: 3px; }
 
 /* AI inventory */
 .inventory-heading { max-width: 1380px; margin: 0 auto 24px; }
@@ -541,7 +561,9 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
   .sales-chart-card { min-height: 190px; }
   .sales-summary { grid-template-columns: 1fr; }
   .sales-summary article + article { border-top: 1px solid #eceef1; border-left: 0; }
-  .time-sales-heading > p:last-child { line-height: 1.6; }
+  .time-sales-heading { align-items: stretch; flex-direction: column; gap: 16px; }
+  .time-sales-heading > div > p:last-child { line-height: 1.6; }
+  .generate-recommendation-button { width: 100%; }
   .auto-approve-panel { flex-wrap: wrap; }
   .time-sale-card { align-items: flex-start; flex-direction: column; min-height: 0; padding: 20px; }
   .time-sale-details { flex-direction: column; gap: 5px; }
@@ -550,6 +572,7 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
   .recommendation-detail dl { grid-template-columns: 1fr; }
   .recommendation-detail dl > div.wide { grid-column: auto; }
   .recommendation-detail-actions { flex-wrap: wrap; }
+  .recommendation-edit-time-grid { grid-template-columns: 1fr; }
   .inventory-recommendation { align-items: flex-start; flex-direction: column; }
   .inventory-actions { width: 100%; }
   .inventory-actions button { flex: 1; }

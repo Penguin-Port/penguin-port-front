@@ -44,20 +44,27 @@ export interface DashboardApproval {
   path: string
 }
 
-export type TimeSaleStatus = 'review' | 'scheduled' | 'active' | 'ended' | 'rejected'
+export type TimeSaleStatus = 'review' | 'edited' | 'scheduled' | 'active' | 'ended' | 'rejected'
 
 export interface TimeSaleRecommendation {
   id: string
+  title?: string
   menu: string
+  menuIds?: string[]
   discountRate: number
   timeRange: string
+  startsAt?: string
+  endsAt?: string
   status: TimeSaleStatus
   reasons: string[]
+  evidence?: Record<string, unknown>
   apiVersion?: number
   expectedEffect?: string
   confidence?: number
   createdAt?: string
   recommendationType?: string
+  source?: string
+  model?: string
 }
 
 export type InventoryRisk = 'high' | 'overstock' | 'low'

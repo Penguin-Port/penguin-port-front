@@ -12,6 +12,7 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     confidence: 0.86,
     createdAt: '2026-08-02T13:42:00+09:00',
     recommendationType: 'TIME_SALE',
+    source: 'DEMO',
   },
   {
     id: 'time-sale-2',
@@ -24,6 +25,7 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     confidence: 0.78,
     createdAt: '2026-08-02T13:35:00+09:00',
     recommendationType: 'TIME_SALE',
+    source: 'DEMO',
   },
   {
     id: 'time-sale-3',
@@ -36,6 +38,7 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     confidence: 0.82,
     createdAt: '2026-08-02T09:12:00+09:00',
     recommendationType: 'TIME_SALE',
+    source: 'DEMO',
   },
   {
     id: 'time-sale-4',
@@ -48,5 +51,6 @@ export const TIME_SALE_RECOMMENDATIONS: TimeSaleRecommendation[] = [
     confidence: 0.74,
     createdAt: '2026-08-01T16:40:00+09:00',
     recommendationType: 'TIME_SALE',
+    source: 'DEMO',
   },
 ]
