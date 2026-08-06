@@ -41,7 +41,9 @@ function createApprovalItems(recommendations: TimeSaleRecommendation[]) {
 export function AdminDashboardPage() {
   const { data, isLoading, error, serverTime, refetch, isApiConnected } = useDashboardRecommendations()
   const pendingRecommendations = useMemo(
-    () => data.filter((recommendation) => recommendation.status === 'review'),
+    () => data.filter((recommendation) => (
+      recommendation.status === 'review' || recommendation.status === 'edited'
+    )),
     [data],
   )
   const approvals = useMemo(

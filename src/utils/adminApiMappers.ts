@@ -60,22 +60,36 @@ export function mapApiRecommendation(item: AiRecommendationResponse): TimeSaleRe
     || title.replace(/\s*\d+\s*%\s*(할인)?\s*(추천)?\s*$/, '')
   const statusMap: Record<AiRecommendationResponse['status'], TimeSaleStatus> = {
     PENDING: 'review',
+    EDITED: 'edited',
     ACCEPTED: 'scheduled',
     REJECTED: 'rejected',
   }
-  const confidence = Number(payload.confidence)
+  const confidenceValue = item.confidence ?? payload.confidence
+  const confidence = Number(confidenceValue)
+  const menuIds = Array.isArray(payload.menuIds)
+    ? payload.menuIds.filter((value): value is string => typeof value === 'string')
+    : undefined
 
   return {
     id: item.recommendationId,
+    title,
     menu,
+    menuIds,
     discountRate,
     timeRange: stringValue(payload.timeRange) || formatTimeRange(payload.startsAt, payload.endsAt),
+    startsAt: stringValue(payload.startsAt) || undefined,
+    endsAt: stringValue(payload.endsAt) || undefined,
     status: statusMap[item.status],
     reasons: item.reason ? [item.reason] : ['AI 추천'],
+    evidence: item.evidence,
     apiVersion: item.version,
     expectedEffect: stringValue(payload.expectedEffect) || stringValue(payload.expectedImpact),
-    confidence: Number.isFinite(confidence) ? confidence : undefined,
+    confidence: confidenceValue !== null && confidenceValue !== undefined && Number.isFinite(confidence)
+      ? confidence
+      : undefined,
     createdAt: stringValue(payload.createdAt) || item.createdAt,
     recommendationType: item.type,
+    source: stringValue(payload.source) || undefined,
+    model: stringValue(payload.model) || undefined,
   }
 }

@@ -1,7 +1,9 @@
 import type { TimeSaleRecommendation, TimeSaleStatus } from '../../../types/admin'
+import { getRecommendationSourceMeta } from '../../../utils/recommendationSource'
 
 const STATUS_LABELS: Record<TimeSaleStatus, string> = {
   review: 'REVIEW',
+  edited: 'EDITED',
   scheduled: 'SCHEDULED',
   active: 'ACTIVE',
   ended: 'ENDED',
@@ -25,7 +27,8 @@ export function TimeSaleCard({
   onReject,
   onOpenDetail,
 }: TimeSaleCardProps) {
-  const isReview = recommendation.status === 'review'
+  const isReview = recommendation.status === 'review' || recommendation.status === 'edited'
+  const source = getRecommendationSourceMeta(recommendation.source)
 
   return (
     <article className="time-sale-card">
@@ -34,6 +37,7 @@ export function TimeSaleCard({
           <span className={`time-sale-status ${recommendation.status}`}>
             {STATUS_LABELS[recommendation.status]}
           </span>
+          <span className={`recommendation-source ${source.tone}`}>{source.label}</span>
           <span>근거 · {recommendation.reasons.join(' · ')}</span>
         </div>
         <h2>{recommendation.menu} {recommendation.discountRate}% 할인</h2>

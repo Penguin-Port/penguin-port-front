@@ -3,7 +3,10 @@ import type {
   AdminLoginResponse,
   AdminPassResponse,
   AiRecommendationResponse,
+  ApiRecommendationType,
+  EditedRecommendationResponse,
   PromotionResponse,
+  RecommendationPatchInput,
   RejectedRecommendationResponse,
 } from '../types/api'
 import { ApiError, apiRequest } from './client'
@@ -95,6 +98,29 @@ export const adminApi = {
 
   async getRecommendations(signal?: AbortSignal) {
     return authenticatedRequest<AiRecommendationResponse[]>('/admin/ai/recommendations', { signal })
+  },
+
+  async generateRecommendations(type: ApiRecommendationType = 'TIME_SALE') {
+    const session = await getSession()
+    return authenticatedRequest<AiRecommendationResponse[]>('/admin/ai/recommendations/generate', {
+      method: 'POST',
+      body: JSON.stringify({ storeId: session.storeId, type }),
+    })
+  },
+
+  async updateRecommendation(
+    recommendationId: string,
+    version: number,
+    input: RecommendationPatchInput,
+  ) {
+    const session = await getSession()
+    return authenticatedRequest<EditedRecommendationResponse>(
+      `/admin/ai/recommendations/${recommendationId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ storeId: session.storeId, version, ...input }),
+      },
+    )
   },
 
   async acceptRecommendation(recommendationId: string, version: number) {
