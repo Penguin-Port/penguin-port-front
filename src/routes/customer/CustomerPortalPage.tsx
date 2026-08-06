@@ -1,87 +1,41 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { CheckIcon, WifiIcon, WifiSmallIcon } from './components/CustomerIcons'
+import { GuestOrderSummary } from './components/GuestOrderSummary'
+import { GuestOtpPanel } from './components/GuestOtpPanel'
+import {
+  createMockPortalOrder,
+  guestPasses,
+  lookupPhone,
+  menuItems,
+  pass,
+  steps,
+} from './customerMock'
+import {
+  activatePassMock,
+  confirmOtpMock,
+  exchangeOrderClaimMock,
+  sendOtpMock,
+} from './customerMockService'
+import type {
+  CustomerType,
+  HomeScreenProps,
+  MenuItem,
+  PortalOrder,
+  PortalOrderItem,
+  Screen,
+} from './customerTypes'
+import type { CustomerPass, CustomerPassStatus } from '../../api/customer'
 import '../../styles/customer.css'
 
-type Screen = 'home' | 'menu' | 'complete' | 'verify' | 'active' | 'lookup' | 'extend'
-type CustomerType = 'guest' | 'member'
-
-type MenuItem = {
-  id: string
-  name: string
-  description: string
-  price: number
-}
-
-type LookupPass = {
-  id: string
-  label: string
-  orderNo: string
-  purchasedAt: string
-  status: 'ACTIVE' | 'EXPIRED'
-  title: string
-  description: string
-}
-
-const pass = {
-  brand: '펭귄포트',
-  orderNo: '20260728-0012',
-  item: '아메리카노 1잔, 케이크 1개',
-  amount: '8,500원',
-  minutes: 120,
-}
-
-const steps: { id: Screen; label: string }[] = [
-  { id: 'home', label: '홈' },
-  { id: 'menu', label: '주문' },
-  { id: 'verify', label: '인증' },
-  { id: 'active', label: '이용 중' },
-]
-
-const menuItems: MenuItem[] = [
-  {
-    id: 'americano',
-    name: '아메리카노',
-    description: '기본 WiFi 이용권이 포함됩니다.',
-    price: 4500,
-  },
-  {
-    id: 'cake',
-    name: '케이크',
-    description: '함께 주문하면 리워드 적립에 가까워져요.',
-    price: 4000,
-  },
-  {
-    id: 'latte',
-    name: '카페라떼',
-    description: '부드러운 우유 베이스 메뉴입니다.',
-    price: 5200,
-  },
-]
-
-const lookupPhone = '01011111111'
-
-const guestPasses: LookupPass[] = [
-  {
-    id: 'pass-active',
-    label: '현재 이용 중',
-    orderNo: pass.orderNo,
-    purchasedAt: '2026.07.28 14:22',
-    status: 'ACTIVE',
-    title: `WiFi 이용권 ${pass.minutes}분`,
-    description: '현재 매장에서 이용 중인 이용권입니다.',
-  },
-  {
-    id: 'pass-expired',
-    label: '이전 구매',
-    orderNo: '20260721-0007',
-    purchasedAt: '2026.07.21 12:08',
-    status: 'EXPIRED',
-    title: 'WiFi 이용권 90분',
-    description: '이용이 종료된 이전 구매 이용권입니다.',
-  },
-]
-
 export function CustomerPortalPage() {
-  const [screen, setScreen] = useState<Screen>('home')
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const orderClaim = searchParams.get('orderClaim')?.trim() ?? ''
+  const isConnectRoute = location.pathname === '/connect'
+  const [screen, setScreen] = useState<Screen>(() =>
+    isConnectRoute ? (orderClaim ? 'complete' : 'claimMissing') : 'home',
+  )
   const [customerType, setCustomerType] = useState<CustomerType>('guest')
   const [guestPhone, setGuestPhone] = useState('')
   const [memberName, setMemberName] = useState('')
@@ -89,7 +43,16 @@ export function CustomerPortalPage() {
   const [now, setNow] = useState(() => new Date())
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
   const [completedOrderItems, setCompletedOrderItems] = useState<MenuItem[]>([])
+  const [portalSession, setPortalSession] = useState('')
+  const [verificationTicket, setVerificationTicket] = useState('')
+  const [challengeId, setChallengeId] = useState('')
+  const [passId, setPassId] = useState('')
+  const [activePass, setActivePass] = useState<CustomerPass | null>(null)
 
+  const portalOrder = useMemo(
+    () => createMockPortalOrder(orderClaim, completedOrderItems),
+    [completedOrderItems, orderClaim],
+  )
   const selectedMenuItems = useMemo(
     () => menuItems.filter((item) => selectedMenuIds.includes(item.id)),
     [selectedMenuIds],
@@ -99,7 +62,31 @@ export function CustomerPortalPage() {
     0,
   )
   const completedOrderLabel =
-    completedOrderItems.map((item) => `${item.name} 1개`).join(', ') || pass.item
+    completedOrderItems.map((item) => `${item.name} 1개`).join(', ') ||
+    formatPortalOrderItems(portalOrder.items)
+
+  useEffect(() => {
+    if (!isConnectRoute) return
+
+    setScreen(orderClaim ? 'complete' : 'claimMissing')
+  }, [isConnectRoute, orderClaim])
+
+  useEffect(() => {
+    if (!isConnectRoute || !orderClaim) return
+
+    let isCanceled = false
+
+    exchangeOrderClaimMock(orderClaim, completedOrderItems).then((response) => {
+      if (isCanceled) return
+
+      setVerificationTicket(response.verificationTicket)
+      setPassId(response.passId ?? '')
+    })
+
+    return () => {
+      isCanceled = true
+    }
+  }, [completedOrderItems, isConnectRoute, orderClaim])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -116,6 +103,18 @@ export function CustomerPortalPage() {
 
   const handlePrimaryAction = () => {
     if (screen === 'home') {
+      if (isConnectRoute || portalSession) {
+        if (passId) {
+          activatePassMock(passId).then((response) => {
+            setActivePass(response)
+            setSecondsLeft(response.remainingSeconds)
+          })
+        }
+
+        setScreen('active')
+        return
+      }
+
       setSelectedMenuIds([])
       setScreen('menu')
     }
@@ -124,8 +123,7 @@ export function CustomerPortalPage() {
       setSelectedMenuIds([])
       setScreen('complete')
     }
-    if (screen === 'complete') setScreen('verify')
-    if (screen === 'verify') setScreen('active')
+    if (screen === 'complete') setScreen('home')
   }
 
   const handleStepChange = (nextScreen: Screen) => {
@@ -136,6 +134,37 @@ export function CustomerPortalPage() {
     setScreen(nextScreen)
   }
 
+  const handleSendOtp = async () => {
+    if (isConnectRoute && !verificationTicket) {
+      throw new Error('주문 인증 정보를 먼저 확인해주세요.')
+    }
+
+    // Mock boundary: replace this with POST /public/otp/send later.
+    const response = await sendOtpMock()
+
+    setChallengeId(response.challengeId)
+
+    return { demoCode: response.demoCode }
+  }
+
+  const handleConfirmOtp = async (code: string) => {
+    // Mock boundary: replace this with POST /public/otp/confirm later.
+    const response = await confirmOtpMock(challengeId, code, passId || null)
+
+    setPortalSession(response.portalSession)
+    setPassId(response.passId ?? '')
+    window.sessionStorage.setItem('portalSession', response.portalSession)
+
+    if (isConnectRoute) {
+      window.history.replaceState(null, '', location.pathname)
+    }
+  }
+
+  const handleOtpReset = () => {
+    setPortalSession('')
+    window.sessionStorage.removeItem('portalSession')
+  }
+
   return (
     <main className="customer-portal">
       <section className="customer-page" aria-label="펭귄포트 고객 포털">
@@ -144,14 +173,21 @@ export function CustomerPortalPage() {
           <div className="portal-brand">
             <BrandMark compact={screen !== 'home'} />
           </div>
+          {screen === 'claimMissing' && <ClaimMissingScreen />}
           {screen === 'home' && (
             <HomeScreen
               customerType={customerType}
               guestPhone={guestPhone}
               memberName={memberName}
+              portalSession={portalSession}
+              isConnectFlow={isConnectRoute}
+              portalOrder={portalOrder}
               onCustomerTypeChange={setCustomerType}
               onGuestPhoneChange={setGuestPhone}
               onMemberLogin={setMemberName}
+              onOtpReset={handleOtpReset}
+              onSendOtp={handleSendOtp}
+              onConfirmOtp={handleConfirmOtp}
               onPrimaryAction={handlePrimaryAction}
               onLookup={() => setScreen('lookup')}
             />
@@ -175,16 +211,15 @@ export function CustomerPortalPage() {
           )}
           {screen === 'complete' && (
             <CompleteScreen
+              portalOrder={portalOrder}
               orderItemLabel={completedOrderLabel}
               paymentAmount={completedOrderTotal || parseWon(pass.amount)}
               onPrimaryAction={handlePrimaryAction}
             />
           )}
-          {screen === 'verify' && (
-            <VerifyScreen onPrimaryAction={handlePrimaryAction} />
-          )}
           {screen === 'active' && (
             <ActiveScreen
+              pass={activePass}
               currentTime={now}
               secondsLeft={secondsLeft}
               onExtend={() => setScreen('extend')}
@@ -213,11 +248,30 @@ export function CustomerPortalPage() {
 }
 
 function getCurrentStep(screen: Screen) {
-  if (screen === 'lookup') return 0
+  if (screen === 'lookup' || screen === 'claimMissing') return 0
   if (screen === 'extend') return 3
   if (screen === 'complete') return 1
 
   return steps.findIndex((step) => step.id === screen)
+}
+
+function ClaimMissingScreen() {
+  return (
+    <div className="screen centered-screen claim-missing-screen">
+      <div className="wifi-orb" aria-hidden="true">
+        <WifiIcon dark />
+      </div>
+      <h1>주문 QR을 다시 확인해주세요</h1>
+      <p className="claim-missing-copy">
+        이용권을 연결하려면 주문표 QR의 orderClaim 정보가 필요합니다.
+      </p>
+      <div className="notice-card warning">
+        <strong>QR 정보가 없습니다</strong>
+        <span>직원에게 주문표 QR을 다시 요청하거나, 새 QR로 접속해주세요.</span>
+      </div>
+      <p className="helper-text">예상 주소 형식: /connect?orderClaim=...</p>
+    </div>
+  )
 }
 
 function DesktopSummary() {
@@ -267,44 +321,110 @@ function HomeScreen({
   customerType,
   guestPhone,
   memberName,
+  portalSession,
+  isConnectFlow,
+  portalOrder,
   onCustomerTypeChange,
   onGuestPhoneChange,
   onMemberLogin,
+  onOtpReset,
+  onSendOtp,
+  onConfirmOtp,
   onPrimaryAction,
   onLookup,
-}: {
-  customerType: CustomerType
-  guestPhone: string
-  memberName: string
-  onCustomerTypeChange: (type: CustomerType) => void
-  onGuestPhoneChange: (phone: string) => void
-  onMemberLogin: (name: string) => void
-  onPrimaryAction: () => void
-  onLookup: () => void
-}) {
+}: HomeScreenProps) {
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [signupName, setSignupName] = useState('')
   const [signupId, setSignupId] = useState('')
   const [signupPassword, setSignupPassword] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [demoCode, setDemoCode] = useState('')
+  const [isOtpSubmitting, setIsOtpSubmitting] = useState(false)
+  const [cooldownSeconds, setCooldownSeconds] = useState(0)
   const isGuest = customerType === 'guest'
-  const canContinueAsGuest = guestPhone.length === 11
-  const title = memberName
-    ? `${memberName}님!`
-    : isGuest
-      ? '비회원으로 WiFi 이용권을 받으세요'
-      : '회원으로 로그인하세요'
-  const description = memberName
-    ? '회원 혜택과 WiFi 이용권을 이어서 확인할 수 있습니다.'
-    : isGuest
-      ? '전화번호만 입력하면 주문과 이용권을 안전하게 연결합니다.'
-      : '아이디와 비밀번호를 입력하면 회원 혜택 화면으로 이어집니다.'
+  const canSendOtp =
+    guestPhone.length === 11 && cooldownSeconds === 0 && !isOtpSubmitting
+  const canConfirmOtp = otpCode.length === 6 && !isOtpSubmitting
+  const hasGuestSession = otpVerified || Boolean(portalSession)
+  const canContinueAsGuest = guestPhone.length === 11 && hasGuestSession
+  const { title, description } = getHomeCopy({
+    isConnectFlow,
+    isGuest,
+    memberName,
+  })
   const canLogin = loginId.trim().length > 0 && password.trim().length > 0
   const canSignup =
     signupName.trim().length > 0 &&
     signupId.trim().length > 0 &&
     signupPassword.trim().length > 0
+
+  useEffect(() => {
+    if (cooldownSeconds === 0) return
+
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((seconds) => Math.max(0, seconds - 1))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [cooldownSeconds])
+
+  const handleGuestPhoneChange = (value: string) => {
+    onGuestPhoneChange(normalizeDigits(value))
+    setOtpSent(false)
+    setOtpVerified(false)
+    setErrorMessage('')
+    setOtpCode('')
+    setDemoCode('')
+    onOtpReset()
+  }
+
+  const handleSendOtp = async () => {
+    if (!canSendOtp) return
+
+    try {
+      setIsOtpSubmitting(true)
+      setOtpVerified(false)
+      setOtpCode('')
+      setErrorMessage('')
+
+      const response = await onSendOtp()
+
+      setDemoCode(response.demoCode)
+      setOtpSent(true)
+      setCooldownSeconds(30)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsOtpSubmitting(false)
+    }
+  }
+
+  const handleConfirmOtp = async () => {
+    if (!canConfirmOtp) return
+
+    try {
+      setIsOtpSubmitting(true)
+      setErrorMessage('')
+
+      await onConfirmOtp(otpCode)
+
+      setOtpVerified(true)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    } finally {
+      setIsOtpSubmitting(false)
+    }
+  }
+
+  const handleOtpCodeChange = (value: string) => {
+    setOtpCode(normalizeDigits(value))
+    setErrorMessage('')
+  }
 
   return (
     <div className="screen home-screen">
@@ -332,23 +452,30 @@ function HomeScreen({
 
       {isGuest && (
         <div className="entry-panel">
-          <label>
-            <span>전화번호</span>
-            <input
-              value={guestPhone}
-              maxLength={11}
-              placeholder="01011111111"
-              inputMode="numeric"
-              onChange={(event) => onGuestPhoneChange(normalizeDigits(event.target.value))}
-            />
-          </label>
+          {isConnectFlow && <GuestOrderSummary portalOrder={portalOrder} />}
+          <GuestOtpPanel
+            phone={guestPhone}
+            otpCode={otpCode}
+            otpSent={otpSent}
+            otpVerified={hasGuestSession}
+            errorMessage={errorMessage}
+            cooldownSeconds={cooldownSeconds}
+            canSendOtp={canSendOtp}
+            canConfirmOtp={canConfirmOtp}
+            demoCode={demoCode}
+            isSubmitting={isOtpSubmitting}
+            onPhoneChange={handleGuestPhoneChange}
+            onSendOtp={handleSendOtp}
+            onOtpCodeChange={handleOtpCodeChange}
+            onConfirmOtp={handleConfirmOtp}
+          />
           <button
             type="button"
             className="primary-button"
             disabled={!canContinueAsGuest}
             onClick={onPrimaryAction}
           >
-            비회원으로 계속
+            {isConnectFlow ? 'WiFi 이용 시작' : '비회원으로 계속'}
           </button>
           <button type="button" className="link-button" onClick={onLookup}>
             발급받은 이용권 확인
@@ -467,6 +594,42 @@ function HomeScreen({
   )
 }
 
+function getHomeCopy({
+  isConnectFlow,
+  isGuest,
+  memberName,
+}: {
+  isConnectFlow: boolean
+  isGuest: boolean
+  memberName: string
+}) {
+  if (memberName) {
+    return {
+      title: `${memberName}님!`,
+      description: '회원 혜택과 WiFi 이용권을 이어서 확인할 수 있습니다.',
+    }
+  }
+
+  if (!isGuest) {
+    return {
+      title: '회원으로 로그인하세요',
+      description: '아이디와 비밀번호를 입력하면 회원 혜택 화면으로 이어집니다.',
+    }
+  }
+
+  if (isConnectFlow) {
+    return {
+      title: '전화번호 인증 후 WiFi를 시작하세요',
+      description: '주문 시 입력한 전화번호로 이용권을 안전하게 연결합니다.',
+    }
+  }
+
+  return {
+    title: '비회원으로 WiFi 이용권을 받으세요',
+    description: '전화번호만 입력하면 주문과 이용권을 안전하게 연결합니다.',
+  }
+}
+
 function MenuScreen({
   selectedMenuIds,
   onBack,
@@ -547,10 +710,12 @@ function MenuScreen({
 }
 
 function CompleteScreen({
+  portalOrder,
   orderItemLabel,
   paymentAmount,
   onPrimaryAction,
 }: {
+  portalOrder: PortalOrder
   orderItemLabel: string
   paymentAmount: number
   onPrimaryAction: () => void
@@ -561,16 +726,20 @@ function CompleteScreen({
         <CheckIcon />
       </div>
       <h1>주문이 완료되었습니다!</h1>
+      <div className="claim-meta">
+        <span>{portalOrder.storeName}</span>
+        <strong>QR 주문 연결 완료</strong>
+      </div>
       <InfoPanel
         rows={[
-          ['주문번호', pass.orderNo],
-          ['주문 내역', orderItemLabel],
-          ['결제금액', formatWon(paymentAmount)],
+          ['주문번호', portalOrder.orderNo],
+          ['주문 내역', orderItemLabel || formatPortalOrderItems(portalOrder.items)],
+          ['결제금액', formatWon(paymentAmount || portalOrder.paidAmount)],
         ]}
       />
       <div className="notice-card">
         <strong>WiFi 이용권이 발급되었습니다</strong>
-        <span>이용 가능 시간 {pass.minutes}분</span>
+        <span>이용 가능 시간 {portalOrder.providedMinutes}분</span>
       </div>
       <div className="bottom-actions single">
         <button
@@ -585,34 +754,13 @@ function CompleteScreen({
   )
 }
 
-function VerifyScreen({ onPrimaryAction }: { onPrimaryAction: () => void }) {
-  return (
-    <div className="screen centered-screen">
-      <h1>WiFi 인증</h1>
-      <div className="wifi-orb" aria-hidden="true">
-        <WifiIcon dark />
-      </div>
-      <InfoPanel
-        rows={[
-          ['주문번호', pass.orderNo],
-          ['이용시간', `${pass.minutes}분`],
-        ]}
-      />
-      <div className="bottom-actions single">
-        <button type="button" className="primary-button" onClick={onPrimaryAction}>
-          WiFi 이용 시작
-        </button>
-        <p className="helper-text">이 버튼을 누르면 WiFi 연결이 완료됩니다.</p>
-      </div>
-    </div>
-  )
-}
-
 function ActiveScreen({
+  pass,
   currentTime,
   secondsLeft,
   onExtend,
 }: {
+  pass: CustomerPass | null
   currentTime: Date
   secondsLeft: number
   onExtend: () => void
@@ -620,13 +768,31 @@ function ActiveScreen({
   const timeLabel = useMemo(() => formatSeconds(secondsLeft), [secondsLeft])
   const currentTimeLabel = useMemo(() => formatClock(currentTime), [currentTime])
   const endTimeLabel = useMemo(
-    () => formatClock(new Date(currentTime.getTime() + secondsLeft * 1000)),
-    [currentTime, secondsLeft],
+    () => formatClock(pass ? new Date(pass.expiresAt) : currentTime),
+    [currentTime, pass],
   )
+  const status = getEffectivePassStatus(pass?.status ?? 'ACTIVE', secondsLeft)
+  const isExpired = status === 'EXPIRED'
+  const isExpiringSoon = status === 'EXPIRING_SOON'
 
   return (
     <div className="screen active-screen">
-      <h1>WiFi 이용 중</h1>
+      <span className={`status-pill ${status.toLowerCase()}`}>
+        {getPassStatusLabel(status)}
+      </span>
+      <h1>{isExpired ? 'WiFi 이용이 종료되었습니다' : 'WiFi 이용 중'}</h1>
+      {pass && (
+        <dl className="active-pass-meta">
+          <div>
+            <dt>이용권</dt>
+            <dd>{pass.passId}</dd>
+          </div>
+          <div>
+            <dt>버전</dt>
+            <dd>{pass.version}</dd>
+          </div>
+        </dl>
+      )}
       <div className="timer-block">
         <div>
           <span>현재 시간</span>
@@ -638,11 +804,32 @@ function ActiveScreen({
         </div>
       </div>
       <p className="end-time">종료 예정 시간 {endTimeLabel}</p>
+      {isExpiringSoon && (
+        <div className="notice-card warning">
+          <strong>이용 종료가 가까워졌습니다</strong>
+          <span>추가 주문을 하면 WiFi 이용 시간이 자동으로 연장됩니다.</span>
+        </div>
+      )}
+      {isExpired && (
+        <div className="notice-card warning">
+          <strong>이용권이 만료되었습니다</strong>
+          <span>추가 주문 또는 직원 문의로 새 이용권을 발급받을 수 있습니다.</span>
+        </div>
+      )}
       <div className="bottom-actions single">
-        <button type="button" className="outline-button" onClick={onExtend}>
+        <button
+          type="button"
+          className="outline-button"
+          disabled={isExpired}
+          onClick={onExtend}
+        >
           이용 연장 / 추가 주문
         </button>
-        <p className="helper-text">이용 종료 5분 전에 안내 메시지가 발송됩니다.</p>
+        <p className="helper-text">
+          {isExpired
+            ? '만료된 이용권은 다시 활성화할 수 없습니다.'
+            : '이용 종료 5분 전에 안내 메시지가 발송됩니다.'}
+        </p>
       </div>
     </div>
   )
@@ -820,7 +1007,7 @@ function StepRail({
     <nav className="step-rail" aria-label="화면 이동">
       {steps.map((step, index) => (
         <button
-          key={step.id}
+          key={step.key}
           type="button"
           className={index === currentStep ? 'active' : ''}
           onClick={() => onStepChange(step.id)}
@@ -829,33 +1016,6 @@ function StepRail({
         </button>
       ))}
     </nav>
-  )
-}
-
-function WifiIcon({ dark }: { dark?: boolean }) {
-  return (
-    <svg viewBox="0 0 48 48" role="img" aria-label="WiFi">
-      <path
-        className={dark ? 'icon-dark' : ''}
-        d="M24 34.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0-11.5c5.4 0 10.4 2.2 14 5.7l-4.3 4.3A13.7 13.7 0 0 0 24 29a13.7 13.7 0 0 0-9.7 4l-4.3-4.3A19.8 19.8 0 0 1 24 23Zm0-11.5c8.6 0 16.4 3.5 22 9.1l-4.3 4.3A24.8 24.8 0 0 0 24 17.5a24.8 24.8 0 0 0-17.7 7.4L2 20.6a31 31 0 0 1 22-9.1Z"
-      />
-    </svg>
-  )
-}
-
-function WifiSmallIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 17.7a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4Zm0-5.1c2.3 0 4.4.9 5.9 2.4l-2 2a5.5 5.5 0 0 0-7.8 0l-2-2a8.3 8.3 0 0 1 5.9-2.4Zm0-5.2c3.7 0 7 1.5 9.4 3.9l-2 2A10.5 10.5 0 0 0 12 10.2a10.5 10.5 0 0 0-7.4 3.1l-2-2A13.2 13.2 0 0 1 12 7.4Z" />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 48 48" role="img" aria-label="완료">
-      <path d="m19.8 31.1-7-7 2.8-2.8 4.2 4.2L32.4 13l2.8 2.8-15.4 15.3Z" />
-    </svg>
   )
 }
 
@@ -875,6 +1035,39 @@ function formatWon(value: number) {
 
 function parseWon(value: string) {
   return Number(value.replace(/\D/g, ''))
+}
+
+function formatPortalOrderItems(items: PortalOrderItem[]) {
+  return items.map((item) => `${item.name} ${item.quantity}개`).join(', ')
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '요청 처리 중 문제가 발생했습니다.'
+}
+
+function getEffectivePassStatus(
+  status: CustomerPassStatus,
+  secondsLeft: number,
+): CustomerPassStatus {
+  if (secondsLeft <= 0) return 'EXPIRED'
+  if (status === 'ACTIVE' && secondsLeft <= 5 * 60) return 'EXPIRING_SOON'
+
+  return status
+}
+
+function getPassStatusLabel(status: CustomerPassStatus) {
+  const labels: Record<CustomerPassStatus, string> = {
+    ISSUED: '발급 완료',
+    ACTIVATING: '활성화 중',
+    ACTIVE: '이용 중',
+    EXPIRING_SOON: '종료 임박',
+    EXPIRED: '종료',
+    CANCELLED: '취소',
+    BLOCKED: '차단',
+    FAILED: '오류',
+  }
+
+  return labels[status]
 }
 
 function formatClock(date: Date) {

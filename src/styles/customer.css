@@ -99,6 +99,8 @@
 }
 
 .customer-portal .screen {
+  width: min(100%, 328px);
+  margin-inline: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -174,6 +176,7 @@
 }
 
 .customer-portal .bottom-actions {
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -186,11 +189,17 @@
 
 .customer-portal .primary-button,
 .customer-portal .outline-button {
+  width: 100%;
   min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
   border-radius: 7px;
   font: inherit;
   font-size: 14px;
   font-weight: 800;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -215,6 +224,9 @@
 }
 
 .customer-portal .link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: center;
   min-height: 32px;
   border: 0;
@@ -223,6 +235,7 @@
   font: inherit;
   font-size: 13px;
   font-weight: 700;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -269,6 +282,39 @@
 .customer-portal .field-stack input:focus {
   outline: 2px solid rgba(255, 49, 95, 0.22);
   border-color: #ff315f;
+}
+
+.customer-portal .guest-order-summary {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e7e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  text-align: left;
+}
+
+.customer-portal .guest-order-summary div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.customer-portal .guest-order-summary span {
+  flex: 0 0 auto;
+  color: #777780;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-portal .guest-order-summary strong {
+  min-width: 0;
+  color: #111114;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .customer-portal .member-ready-card,
@@ -356,8 +402,7 @@
 
 .customer-portal .confirm-button {
   align-self: center;
-  min-width: 92px;
-  padding-inline: 22px;
+  width: 100%;
 }
 
 .customer-portal .menu-screen {
@@ -507,6 +552,16 @@
   background: #f6f6f7;
 }
 
+.customer-portal .notice-card.warning {
+  border: 1px solid #f0d7aa;
+  background: #fff8ea;
+}
+
+.customer-portal .notice-card.success {
+  border: 1px solid #cce8d4;
+  background: #f0fbf4;
+}
+
 .customer-portal .notice-card strong {
   display: block;
   color: #111114;
@@ -519,6 +574,85 @@
   margin-top: 6px;
 }
 
+.customer-portal .claim-meta {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 14px;
+  color: #8a8a91;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-portal .claim-meta strong {
+  color: #111114;
+  font-size: 14px;
+}
+
+.customer-portal .claim-missing-screen {
+  justify-content: center;
+  padding-top: 0;
+}
+
+.customer-portal .claim-missing-copy {
+  max-width: 280px;
+  margin: -10px auto 18px;
+  color: #8a8a91;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.customer-portal .otp-panel {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  text-align: left;
+}
+
+.customer-portal .otp-panel label {
+  display: grid;
+  gap: 8px;
+  color: #777780;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-portal .otp-panel input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid #dedee4;
+  border-radius: 8px;
+  color: #111114;
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.customer-portal .otp-panel input:disabled {
+  color: #777780;
+  background: #f6f6f7;
+}
+
+.customer-portal .otp-panel input:focus {
+  outline: 2px solid rgba(255, 49, 95, 0.22);
+  border-color: #ff315f;
+}
+
+.customer-portal .otp-message {
+  margin: 0;
+  color: #8a8a91;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.customer-portal .otp-message.error {
+  color: #d72d50;
+  font-weight: 800;
+}
+
 .customer-portal .active-screen {
   align-items: center;
   padding-top: 54px;
@@ -528,7 +662,7 @@
 .customer-portal .timer-block {
   display: grid;
   gap: 28px;
-  margin-top: 124px;
+  margin-top: 64px;
 }
 
 .customer-portal .timer-block span {
@@ -552,6 +686,40 @@
 
 .customer-portal .end-time {
   margin-top: 76px;
+}
+
+.customer-portal .active-pass-meta {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #e7e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.customer-portal .active-pass-meta div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.customer-portal .active-pass-meta dt {
+  color: #777780;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.customer-portal .active-pass-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: #111114;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .customer-portal .form-screen {
@@ -622,7 +790,21 @@
   background: #111114;
 }
 
-.customer-portal .status-pill.expired {
+.customer-portal .status-pill.issued,
+.customer-portal .status-pill.activating {
+  color: #111114;
+  background: #ececf0;
+}
+
+.customer-portal .status-pill.expiring_soon {
+  color: #8a4d00;
+  background: #fff2d8;
+}
+
+.customer-portal .status-pill.expired,
+.customer-portal .status-pill.cancelled,
+.customer-portal .status-pill.blocked,
+.customer-portal .status-pill.failed {
   color: #777780;
   background: #ececf0;
 }
