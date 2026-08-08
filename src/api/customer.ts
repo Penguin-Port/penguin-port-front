@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiDataRequest } from './client'
 
 export interface OrderClaimExchangeRequest {
   orderClaim: string
@@ -33,7 +33,7 @@ export interface OtpSendResponse {
   challengeId: string
   expiresAt: string
   maxAttempts: number
-  demoCode: string
+  demoCode: string | null
 }
 
 export interface OtpConfirmRequest {
@@ -73,6 +73,12 @@ export interface UpsellHintResponse {
   dailyTotal: number
   nextTierAmount: number | null
   remainingAmountToNextTier: number
+  nextTierBenefitsPreview?: string[]
+  suggestedItems?: Array<{
+    productId: string
+    name: string
+    price: number
+  }>
 }
 
 export type RewardFulfillMode = 'IMMEDIATE' | 'COUPON_7D'
@@ -115,47 +121,47 @@ function portalSessionHeaders(portalSession: string) {
 
 export const customerApi = {
   exchangeOrderClaim(body: OrderClaimExchangeRequest) {
-    return apiRequest<OrderClaimExchangeResponse>('/public/order-claims/exchange', {
+    return apiDataRequest<OrderClaimExchangeResponse>('/public/order-claims/exchange', {
       method: 'POST',
       body: JSON.stringify(body),
     })
   },
 
   sendOtp(body: OtpSendRequest) {
-    return apiRequest<OtpSendResponse>('/public/otp/send', {
+    return apiDataRequest<OtpSendResponse>('/public/otp/send', {
       method: 'POST',
       body: JSON.stringify(body),
     })
   },
 
   confirmOtp(body: OtpConfirmRequest) {
-    return apiRequest<OtpConfirmResponse>('/public/otp/confirm', {
+    return apiDataRequest<OtpConfirmResponse>('/public/otp/confirm', {
       method: 'POST',
       body: JSON.stringify(body),
     })
   },
 
   activatePass(passId: string, portalSession: string) {
-    return apiRequest<CustomerPass>(`/public/passes/${passId}/activate`, {
+    return apiDataRequest<CustomerPass>(`/public/passes/${passId}/activate`, {
       method: 'POST',
       headers: portalSessionHeaders(portalSession),
     })
   },
 
   getPass(passId: string, portalSession: string) {
-    return apiRequest<CustomerPass>(`/public/passes/${passId}`, {
+    return apiDataRequest<CustomerPass>(`/public/passes/${passId}`, {
       headers: portalSessionHeaders(portalSession),
     })
   },
 
   getUpsellHint(portalSession: string) {
-    return apiRequest<UpsellHintResponse>('/public/upsell-hint', {
+    return apiDataRequest<UpsellHintResponse>('/public/upsell-hint', {
       headers: portalSessionHeaders(portalSession),
     })
   },
 
   getRewardOptions(grantId: string, portalSession: string) {
-    return apiRequest<RewardOptionsResponse>(
+    return apiDataRequest<RewardOptionsResponse>(
       `/public/rewards/grants/${grantId}/options`,
       {
         headers: portalSessionHeaders(portalSession),
@@ -168,10 +174,13 @@ export const customerApi = {
     body: RewardChooseRequest,
     portalSession: string,
   ) {
-    return apiRequest<RewardChooseResponse>(`/public/rewards/${grantId}/choose`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-      headers: portalSessionHeaders(portalSession),
-    })
+    return apiDataRequest<RewardChooseResponse>(
+      `/public/rewards/grants/${grantId}/choose`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: portalSessionHeaders(portalSession),
+      },
+    )
   },
 }
