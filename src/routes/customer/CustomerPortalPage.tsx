@@ -7,12 +7,7 @@ import {
   recommendedItems,
   rewardOptions,
 } from './customerMock'
-import {
-  activatePassMock,
-  confirmOtpMock,
-  exchangeOrderClaimMock,
-  sendOtpMock,
-} from './customerMockService'
+import { customerPortalService } from './customerService'
 import type { PortalOrder, Screen } from './customerTypes'
 import type { CustomerPass, CustomerPassStatus } from '../../api/customer'
 import '../../styles/customer.css'
@@ -98,8 +93,11 @@ export function CustomerPortalPage() {
 
     if (screenParam && screenParamSet.has(screenParam)) {
       setScreen(screenParam)
-      if (screenParam === 'active' && savedPassId && !activePass) {
-        activatePassMock(savedPassId).then((response) => {
+      if (screenParam === 'active' && savedSession && savedPassId && !activePass) {
+        customerPortalService.getPass({
+          passId: savedPassId,
+          portalSession: savedSession,
+        }).then((response) => {
           setActivePass(response)
           setSecondsLeft(response.remainingSeconds)
         })
@@ -109,7 +107,10 @@ export function CustomerPortalPage() {
 
     if (!orderClaim && savedSession && savedPassId) {
       setScreen('active')
-      activatePassMock(savedPassId).then((response) => {
+      customerPortalService.getPass({
+        passId: savedPassId,
+        portalSession: savedSession,
+      }).then((response) => {
         setActivePass(response)
         setSecondsLeft(response.remainingSeconds)
       })
@@ -125,7 +126,7 @@ export function CustomerPortalPage() {
 
     let isCanceled = false
 
-    exchangeOrderClaimMock(claimForDemo).then((response) => {
+    customerPortalService.exchangeOrderClaim(claimForDemo).then((response) => {
       if (isCanceled) return
 
       setPortalOrder({
@@ -184,10 +185,13 @@ export function CustomerPortalPage() {
         throw new Error('주문 인증 정보를 먼저 확인해 주세요.')
       }
 
-      const response = await sendOtpMock()
+      const response = await customerPortalService.sendOtp({
+        verificationTicket,
+        phone: guestPhone,
+      })
 
       setChallengeId(response.challengeId)
-      setDemoCode(response.demoCode)
+      setDemoCode(response.demoCode ?? '')
       setOtpSent(true)
       setCooldownSeconds(30)
     } catch (error) {
@@ -204,7 +208,11 @@ export function CustomerPortalPage() {
       setIsOtpSubmitting(true)
       setOtpError('')
 
-      const response = await confirmOtpMock(challengeId, otpCode, passId || null)
+      const response = await customerPortalService.confirmOtp({
+        challengeId,
+        code: otpCode,
+        passId: passId || null,
+      })
 
       setPassId(response.passId ?? '')
       setOtpVerified(true)
@@ -223,7 +231,11 @@ export function CustomerPortalPage() {
   const handleActivatePass = async () => {
     if (!canStartWifi || !passId) return
 
-    const response = await activatePassMock(passId)
+    const savedSession = window.sessionStorage.getItem('portalSession') ?? ''
+    const response = await customerPortalService.activatePass({
+      passId,
+      portalSession: savedSession,
+    })
 
     setActivePass(response)
     setSecondsLeft(response.remainingSeconds)

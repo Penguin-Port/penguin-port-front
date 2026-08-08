@@ -35,3 +35,12 @@ export async function apiRequest<T>(
 
   return response.json() as Promise<ApiEnvelope<T>>
 }
+
+export async function apiDataRequest<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
+  const envelope = await apiRequest<T>(path, options)
+
+  return envelope.data
+}
