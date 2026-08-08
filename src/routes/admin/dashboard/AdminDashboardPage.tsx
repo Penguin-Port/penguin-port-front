@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { adminApi } from '../../../api'
 import {
   AiInsightBanner,
   DashboardActivityPanel,
@@ -7,8 +8,31 @@ import {
 } from '../../../components/admin'
 import { DASHBOARD_APPROVALS, DASHBOARD_METRICS } from '../../../constants/adminDashboard'
 import { ADMIN_ROUTES } from '../../../constants/adminRoutes'
+import { isApiConfigured } from '../../../config/env'
 import { useDashboardRecommendations } from '../../../hooks/useDashboardRecommendations'
-import type { DashboardApproval, TimeSaleRecommendation } from '../../../types/admin'
+import type { DashboardActivity, DashboardApproval, TimeSaleRecommendation } from '../../../types/admin'
+
+interface DashboardOverview {
+  activePasses: number
+  totalSales: number
+  rewardTiers: number
+  activities: DashboardActivity[]
+}
+
+function formatAuditActivities(items: Awaited<ReturnType<typeof adminApi.getAuditLogs>>['data']): DashboardActivity[] {
+  return items.slice(0, 4).map((item) => {
+    const createdAt = item.createdAt ? new Date(item.createdAt) : null
+    return {
+      id: item.auditId,
+      title: item.action,
+      description: `${item.resourceType} · ${item.resourceId}`,
+      time: createdAt && !Number.isNaN(createdAt.getTime())
+        ? createdAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        : '-',
+      color: 'gray',
+    }
+  })
+}
 
 function getRecommendationGroup(recommendation: TimeSaleRecommendation) {
   const type = recommendation.recommendationType?.toUpperCase() ?? 'TIME_SALE'
@@ -40,6 +64,40 @@ function createApprovalItems(recommendations: TimeSaleRecommendation[]) {
 
 export function AdminDashboardPage() {
   const { data, isLoading, error, serverTime, refetch, isApiConnected } = useDashboardRecommendations()
+  const [overview, setOverview] = useState<DashboardOverview | null>(null)
+  const [overviewError, setOverviewError] = useState('')
+
+  const loadOverview = useCallback(async (signal?: AbortSignal) => {
+    if (!isApiConfigured) return
+    try {
+      const [passes, sales, tiers, audit] = await Promise.all([
+        adminApi.getActivePasses(signal),
+        adminApi.getSalesSummary(signal),
+        adminApi.getRewardTiers(signal),
+        adminApi.getAuditLogs(4, signal),
+      ])
+      setOverview({
+        activePasses: passes.data.length,
+        totalSales: sales.data.totalSales,
+        rewardTiers: tiers.data.length,
+        activities: formatAuditActivities(audit.data),
+      })
+      setOverviewError('')
+    } catch (requestError) {
+      if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+      setOverviewError('운영 지표를 불러오지 못했습니다.')
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadOverview(controller.signal)
+    const interval = window.setInterval(() => void loadOverview(), 10_000)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+    }
+  }, [loadOverview])
   const pendingRecommendations = useMemo(
     () => data.filter((recommendation) => (
       recommendation.status === 'review' || recommendation.status === 'edited'
@@ -51,7 +109,17 @@ export function AdminDashboardPage() {
     [isApiConnected, pendingRecommendations],
   )
   const metrics = useMemo(() => DASHBOARD_METRICS.map((metric) => {
-    if (!isApiConnected || metric.id !== 'approvals') return metric
+    if (!isApiConnected) return metric
+    if (metric.id === 'active-passes' && overview) {
+      return { ...metric, value: `${overview.activePasses}장`, detail: '현재 서버 기준 활성 이용권' }
+    }
+    if (metric.id === 'sales' && overview) {
+      return { ...metric, value: `${overview.totalSales.toLocaleString('ko-KR')}원`, detail: '현재 영업일 결제 매출' }
+    }
+    if (metric.id === 'rewards' && overview) {
+      return { ...metric, label: '리워드 티어', value: `${overview.rewardTiers}개`, detail: '현재 운영 중인 누적 혜택', path: ADMIN_ROUTES.rewardTiers }
+    }
+    if (metric.id !== 'approvals') return metric
     if (isLoading) return { ...metric, value: '…', detail: 'AI 추천 현황을 불러오는 중' }
     if (error) return { ...metric, value: '-', detail: '추천 조회 상태를 확인해주세요' }
     return {
@@ -59,7 +127,7 @@ export function AdminDashboardPage() {
       value: `${pendingRecommendations.length}건`,
       detail: pendingRecommendations.length > 0 ? 'AI 제안 검토가 필요해요' : '모든 AI 추천을 검토했어요',
     }
-  }), [error, isApiConnected, isLoading, pendingRecommendations.length])
+  }), [error, isApiConnected, isLoading, overview, pendingRecommendations.length])
   const latestRecommendation = pendingRecommendations[0] ?? null
   const updatedAt = serverTime ? new Date(serverTime) : new Date()
 
@@ -74,10 +142,10 @@ export function AdminDashboardPage() {
         <div className="date-chip"><span>●</span> 실시간 업데이트 · {updatedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</div>
       </section>
 
-      {error && isApiConnected && (
+      {(error || overviewError) && isApiConnected && (
         <div className="dashboard-api-error" role="alert">
-          <span>{error}</span>
-          <button onClick={() => void refetch()}>다시 시도</button>
+          <span>{error || overviewError}</span>
+          <button onClick={() => { void refetch(); void loadOverview() }}>다시 시도</button>
         </div>
       )}
 
@@ -88,7 +156,7 @@ export function AdminDashboardPage() {
       <AiInsightBanner recommendation={latestRecommendation} isLoading={isApiConnected && isLoading} />
 
       <section className="content-grid">
-        <DashboardActivityPanel />
+        <DashboardActivityPanel activities={overview?.activities} />
         <DashboardApprovalPanel approvals={approvals} isLoading={isApiConnected && isLoading} />
       </section>
 

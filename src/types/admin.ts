@@ -83,7 +83,7 @@ export interface MenuTrend {
   id: string
   name: string
   description: string
-  expectedMargin: number
+  expectedMargin?: number
   status: MenuTrendStatus
 }
 
@@ -102,12 +102,16 @@ export interface RewardBenefit {
   id: string
   name: string
   weight: number
+  benefitType?: string
+  payload?: Record<string, unknown>
 }
 
 export interface RewardTier {
   id: string
+  name?: string
   threshold: number
-  reachRate: number
+  reachRate?: number
+  sortOrder?: number
   benefits: RewardBenefit[]
 }
 
@@ -165,6 +169,7 @@ export interface TeamMember {
   email: string
   role: TeamRole
   permissions: string
+  isActive?: boolean
 }
 
 export interface AuditLogItem {

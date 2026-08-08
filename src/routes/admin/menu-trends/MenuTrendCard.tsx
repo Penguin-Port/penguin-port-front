@@ -28,16 +28,17 @@ export function MenuTrendCard({
         <span className={`menu-trend-status ${trend.status}`}>{STATUS_LABELS[trend.status]}</span>
       </header>
       <p>{trend.description}</p>
-      <strong>예상 마진 {trend.expectedMargin}%</strong>
+      <strong>{trend.expectedMargin === undefined ? '서버 추천 후보' : `예상 마진 ${trend.expectedMargin}%`}</strong>
+      <small className="menu-trend-local-note">아래 작업은 서버에 저장되지 않는 로컬 미리보기입니다.</small>
       <div className="menu-trend-actions">
         <button
           className={isInterested ? 'is-interested' : ''}
           onClick={() => onToggleInterest(trend.id)}
         >
-          {isInterested ? '관심 해제' : '관심 표시'}
+          {isInterested ? '관심 해제 (로컬)' : '관심 표시 (로컬)'}
         </button>
         <button onClick={() => onSaveDraft(trend.id)}>
-          {isDraftSaved ? '초안 저장됨' : '메뉴 초안 저장'}
+          {isDraftSaved ? '초안 저장됨 (로컬)' : '메뉴 초안 저장 (로컬)'}
         </button>
       </div>
     </article>

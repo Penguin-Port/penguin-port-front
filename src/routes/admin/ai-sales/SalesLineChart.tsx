@@ -7,6 +7,7 @@ interface SalesLineChartProps {
 }
 
 function toPoints(values: number[], max: number) {
+  if (values.length === 1) return [{ x: 150, y: 74 - (values[0] / max) * 58 }]
   return values.map((value, index) => {
     const x = 12 + (index * 276) / (values.length - 1)
     const y = 74 - (value / max) * 58

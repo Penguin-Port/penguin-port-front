@@ -13,9 +13,9 @@ export function useDashboardRecommendations() {
   const [error, setError] = useState('')
   const [serverTime, setServerTime] = useState<string | null>(null)
 
-  const refetch = useCallback(async (signal?: AbortSignal) => {
+  const refetch = useCallback(async (signal?: AbortSignal, showLoading = true) => {
     if (!isApiConfigured) return
-    setIsLoading(true)
+    if (showLoading) setIsLoading(true)
     try {
       const response = await adminApi.getRecommendations(signal)
       setData(response.data.map(mapApiRecommendation))
@@ -25,14 +25,18 @@ export function useDashboardRecommendations() {
       if (requestError instanceof DOMException && requestError.name === 'AbortError') return
       setError('AI 추천 현황을 불러오지 못했습니다.')
     } finally {
-      setIsLoading(false)
+      if (showLoading) setIsLoading(false)
     }
   }, [])
 
   useEffect(() => {
     const controller = new AbortController()
     void refetch(controller.signal)
-    return () => controller.abort()
+    const interval = window.setInterval(() => void refetch(undefined, false), 10_000)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+    }
   }, [refetch])
 
   return { data, isLoading, error, serverTime, refetch, isApiConnected: isApiConfigured }
