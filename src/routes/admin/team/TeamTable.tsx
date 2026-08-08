@@ -9,7 +9,7 @@ export function TeamTable({ members }: TeamTableProps) {
   return (
     <div className="team-table-wrap">
       <table className="team-table">
-        <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th>권한 범위</th></tr></thead>
+        <thead><tr><th>관리자 ID</th><th>상태</th><th>역할</th><th>권한 범위</th></tr></thead>
         <tbody>
           {members.map((member) => (
             <tr key={member.id}>

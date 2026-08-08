@@ -1,6 +1,11 @@
 import { INVENTORY_ITEMS, INVENTORY_RISK_LABELS } from '../../../constants/adminInventory'
+import type { InventoryItem } from '../../../types/admin'
 
-export function InventoryTable() {
+interface InventoryTableProps {
+  items?: InventoryItem[]
+}
+
+export function InventoryTable({ items = INVENTORY_ITEMS }: InventoryTableProps) {
   return (
     <div className="inventory-table-wrap">
       <table className="inventory-table">
@@ -13,7 +18,7 @@ export function InventoryTable() {
           </tr>
         </thead>
         <tbody>
-          {INVENTORY_ITEMS.map((item) => (
+          {items.map((item) => (
             <tr key={item.id}>
               <td>{item.name}</td>
               <td>{item.quantity}</td>

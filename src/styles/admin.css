@@ -195,6 +195,10 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .sales-line-chart text { fill: #a2a7b0; font: 5px 'DM Sans', sans-serif; }
 .chart-grid-line { stroke: #edeef1; stroke-width: .7; }
 .repeat-chart { grid-column: 1; }
+.repeat-customer-summary { display: flex; flex-direction: column; justify-content: center; min-height: 120px; padding: 8px 4px 12px; }
+.repeat-customer-summary strong { font: 800 34px 'DM Sans', 'Noto Sans KR', sans-serif; letter-spacing: -1px; }
+.repeat-customer-summary span { margin-top: 8px; color: #555c68; font-size: 11px; font-weight: 600; }
+.repeat-customer-summary small { margin-top: 7px; color: #9aa0aa; font-size: 9px; line-height: 1.5; }
 .top-menu-chart { display: grid; gap: 12px; padding-top: 8px; }
 .menu-bar-row { display: grid; grid-template-columns: 66px 1fr 28px; align-items: center; gap: 8px; }
 .menu-bar-row > span { color: #656b76; font-size: 8px; white-space: nowrap; }
@@ -315,6 +319,7 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .menu-trend-status.new { color: var(--pink); }
 .menu-trend-card > p { min-height: 42px; margin: 17px 0 8px; color: #646a75; font-size: 11px; line-height: 1.75; }
 .menu-trend-card > strong { color: #707681; font-size: 11px; font-weight: 600; }
+.menu-trend-local-note { margin-top: 7px; color: #9aa0aa; font-size: 9px; line-height: 1.5; }
 .menu-trend-actions { display: flex; gap: 9px; margin-top: auto; padding-top: 15px; }
 .menu-trend-actions button { height: 40px; padding: 0 15px; color: var(--ink); border: 1px solid #dfe1e5; border-radius: 999px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer; transition: .18s ease; }
 .menu-trend-actions button:first-child { color: #fff; border-color: var(--ink); background: var(--ink); }
@@ -352,9 +357,11 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .empty-card { margin: 0; padding: 42px; color: #8c929d; border: 1px solid var(--line); border-radius: 15px; background: #fff; text-align: center; font-size: 11px; }
 
 /* Wi-Fi policies */
-.wifi-policies-heading { max-width: 1380px; margin: 0 auto 22px; }
+.wifi-policies-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; max-width: 1380px; margin: 0 auto 22px; }
 .wifi-policies-heading h1 { margin-bottom: 8px; }
-.wifi-policies-heading > p:last-child { margin: 0; color: var(--muted); font-size: 12px; }
+.wifi-policies-heading > div > p:last-child { margin: 0; color: var(--muted); font-size: 12px; }
+.policy-save-button { min-height: 42px; padding: 0 18px; color: #fff; border: 0; border-radius: 999px; background: var(--ink); font-size: 11px; font-weight: 700; cursor: pointer; }
+.policy-save-button:disabled { opacity: .55; cursor: not-allowed; }
 .wifi-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; max-width: 1380px; margin: auto; }
 .wifi-policy-card { min-width: 0; min-height: 345px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: var(--shadow); }
 .wifi-policy-card h2 { margin: 0 0 21px; font-size: 16px; letter-spacing: -.4px; }
@@ -396,7 +403,14 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .reward-benefit small { color: #a0a5ae; font: 500 8px 'DM Sans', sans-serif; }
 .reward-benefit-list button { color: #8d929c; border-style: dashed; cursor: pointer; transition: .18s ease; }
 .reward-benefit-list button:hover { color: var(--ink); border-color: #aeb2ba; transform: translateY(-1px); }
+.reward-benefit-list button:disabled { opacity: .55; cursor: wait; transform: none; }
 .reward-benefit-area > p { margin: 11px 0 0; color: #a1a6af; font-size: 9px; line-height: 1.5; }
+.reward-benefit-form { display: grid; gap: 15px; margin-top: 22px; }
+.reward-benefit-form label { display: grid; gap: 7px; color: #626873; font-size: 10px; font-weight: 700; }
+.reward-benefit-form input, .reward-benefit-form select { width: 100%; min-height: 43px; padding: 0 12px; color: var(--ink); border: 1px solid #dfe1e5; border-radius: 9px; background: #fff; font: 600 11px 'DM Sans', 'Noto Sans KR', sans-serif; }
+.reward-benefit-form input:focus, .reward-benefit-form select:focus { border-color: #8d98bd; outline: 0; box-shadow: 0 0 0 3px #eef1ff; }
+.reward-benefit-form input:disabled, .reward-benefit-form select:disabled { color: #8b9099; background: #f5f6f8; }
+.reward-benefit-form-error { margin: 0; color: #c93650; font-size: 10px; font-weight: 600; }
 
 /* Reward history */
 .reward-history-heading { max-width: 1380px; margin: 0 auto 26px; }
@@ -492,6 +506,7 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .invite-member-modal form > div { display: flex; justify-content: flex-end; gap: 9px; margin-top: 6px; }
 .invite-member-modal form > div button { height: 40px; padding: 0 16px; border: 1px solid #dfe1e5; border-radius: 999px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
 .invite-member-modal form > div button:last-child { color: #fff; border-color: var(--ink); background: var(--ink); }
+.invite-member-modal button:disabled { opacity: .55; cursor: wait; }
 
 /* Audit log */
 .audit-heading { max-width: 1380px; margin: 0 auto 22px; }
@@ -585,7 +600,9 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
   .live-passes-table-wrap { overflow-x: auto; }
   .live-passes-table { min-width: 850px; }
   .live-pass-toast { left: 12px; bottom: 12px; width: calc(100vw - 24px); }
-  .wifi-policies-heading > p:last-child { line-height: 1.6; }
+  .wifi-policies-heading { align-items: stretch; flex-direction: column; }
+  .wifi-policies-heading > div > p:last-child { line-height: 1.6; }
+  .policy-save-button { width: 100%; }
   .wifi-policy-grid { grid-template-columns: 1fr; }
   .wifi-policy-card { min-height: 0; }
   .wifi-simulation header { align-items: flex-start; flex-direction: column; }

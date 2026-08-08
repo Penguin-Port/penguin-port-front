@@ -1,5 +1,25 @@
-import type { AdminPassResponse, AiRecommendationResponse } from '../types/api'
-import type { LivePass, TimeSaleRecommendation, TimeSaleStatus } from '../types/admin'
+import type {
+  AdminPassResponse,
+  AiRecommendationResponse,
+  AuditLogResponse,
+  InventoryItemResponse,
+  MenuTrendResponse,
+  RewardTierResponse,
+  TeamMemberResponse,
+} from '../types/api'
+import type {
+  AuditLogItem,
+  InventoryItem,
+  InventoryRisk,
+  LivePass,
+  MenuTrend,
+  RewardTier,
+  TeamMember,
+  TeamRole,
+  TimeSaleRecommendation,
+  TimeSaleStatus,
+} from '../types/admin'
+import { TEAM_ROLE_PERMISSIONS } from '../constants/adminTeam'
 
 function formatMinutes(totalMinutes: number) {
   if (totalMinutes <= 0) return '종료'
@@ -91,5 +111,96 @@ export function mapApiRecommendation(item: AiRecommendationResponse): TimeSaleRe
     recommendationType: item.type,
     source: stringValue(payload.source) || undefined,
     model: stringValue(payload.model) || undefined,
+  }
+}
+
+function inventoryRisk(score: number, quantity: number, threshold: number): InventoryRisk {
+  if (score >= 45) return 'high'
+  if (quantity > Math.max(threshold * 3, 20)) return 'overstock'
+  return 'low'
+}
+
+function expiryLabel(expiresOn: string | null) {
+  if (!expiresOn) return '-'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const expiry = new Date(`${expiresOn}T00:00:00`)
+  const days = Math.ceil((expiry.getTime() - today.getTime()) / 86_400_000)
+  return days >= 0 ? `D-${days}` : `D+${Math.abs(days)}`
+}
+
+export function mapApiInventoryItem(item: InventoryItemResponse): InventoryItem {
+  return {
+    id: item.inventoryItemId,
+    name: item.productName ?? item.productId,
+    quantity: `${item.quantity.toLocaleString('ko-KR')}${item.unit}`,
+    expiry: expiryLabel(item.expiresOn),
+    risk: inventoryRisk(item.riskScore, item.quantity, item.lowStockThreshold),
+  }
+}
+
+export function mapApiMenuTrend(item: MenuTrendResponse, index: number): MenuTrend {
+  return {
+    id: `${item.source}-${index}-${item.menuName}`,
+    name: item.menuName,
+    description: item.reason,
+    status: index === 0 ? 'new' : 'reviewing',
+  }
+}
+
+export function mapApiRewardTier(item: RewardTierResponse): RewardTier {
+  return {
+    id: item.tierId,
+    name: item.name,
+    threshold: item.thresholdAmount,
+    sortOrder: item.sortOrder,
+    benefits: item.benefits.map((benefit) => {
+      const weight = Number(benefit.payload.weight)
+      return {
+        id: benefit.benefitId,
+        name: benefit.title,
+        weight: Number.isFinite(weight) ? weight : 1,
+        benefitType: benefit.benefitType,
+        payload: benefit.payload,
+      }
+    }),
+  }
+}
+
+const TEAM_ROLE_MAP: Record<TeamMemberResponse['role'], TeamRole> = {
+  OWNER: 'owner',
+  MANAGER: 'manager',
+  STAFF: 'staff',
+  VIEWER: 'viewer',
+}
+
+export function mapApiTeamMember(item: TeamMemberResponse): TeamMember {
+  const role = TEAM_ROLE_MAP[item.role]
+  return {
+    id: item.adminId,
+    name: item.username,
+    email: item.isActive ? '활성 계정' : '비활성 계정',
+    role,
+    permissions: TEAM_ROLE_PERMISSIONS[role],
+    isActive: item.isActive,
+  }
+}
+
+function metadataLabel(metadata: Record<string, unknown>) {
+  const entries = Object.entries(metadata)
+  if (entries.length === 0) return '-'
+  return entries.map(([key, value]) => `${key}: ${String(value)}`).join(' · ')
+}
+
+export function mapApiAuditLog(item: AuditLogResponse): AuditLogItem {
+  const createdAt = item.createdAt ? new Date(item.createdAt) : null
+  return {
+    id: item.auditId,
+    time: createdAt && !Number.isNaN(createdAt.getTime())
+      ? createdAt.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : '-',
+    actor: item.actorId ?? item.actorType,
+    action: item.action,
+    change: `${item.resourceType} ${item.resourceId} · ${metadataLabel(item.metadata)}`,
   }
 }
