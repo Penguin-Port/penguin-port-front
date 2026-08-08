@@ -1,4 +1,19 @@
-import type { GuestOtpPanelProps } from '../customerTypes'
+type GuestOtpPanelProps = {
+  phone: string
+  otpCode: string
+  otpSent: boolean
+  otpVerified: boolean
+  errorMessage: string
+  cooldownSeconds: number
+  canSendOtp: boolean
+  canConfirmOtp: boolean
+  demoCode: string
+  isSubmitting: boolean
+  onPhoneChange: (phone: string) => void
+  onSendOtp: () => void
+  onOtpCodeChange: (code: string) => void
+  onConfirmOtp: () => void
+}
 
 export function GuestOtpPanel({
   phone,
@@ -45,11 +60,11 @@ export function GuestOtpPanel({
         <label>
           <span>인증번호 6자리</span>
           <input
-          value={otpCode}
-          maxLength={6}
-          placeholder={demoCode || '123456'}
-          inputMode="numeric"
-          disabled={otpVerified}
+            value={otpCode}
+            maxLength={6}
+            placeholder={demoCode || '123456'}
+            inputMode="numeric"
+            disabled={otpVerified}
             aria-invalid={Boolean(errorMessage)}
             aria-describedby={errorMessage ? 'guest-otp-error-message' : undefined}
             onChange={(event) => onOtpCodeChange(event.target.value)}
@@ -61,8 +76,8 @@ export function GuestOtpPanel({
           type="button"
           className="primary-button"
           disabled={!canConfirmOtp}
-        onClick={onConfirmOtp}
-      >
+          onClick={onConfirmOtp}
+        >
           {isSubmitting ? '확인 중' : '인증번호 확인'}
         </button>
       )}
