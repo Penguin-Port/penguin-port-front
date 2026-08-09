@@ -16,6 +16,7 @@ import type {
   RewardOption,
   UpsellHintResponse,
 } from '../../api/customer'
+import { ApiError } from '../../api/client'
 import '../../styles/customer.css'
 
 const screenParamSet = new Set<Screen>([
@@ -148,21 +149,33 @@ export function CustomerPortalPage() {
 
     let isCanceled = false
 
-    customerPortalService.exchangeOrderClaim(claimForDemo).then((response) => {
-      if (isCanceled) return
+    customerPortalService
+      .exchangeOrderClaim(claimForDemo)
+      .then((response) => {
+        if (isCanceled) return
 
-      setPortalOrder({
-        orderClaim: claimForDemo,
-        storeName: response.storeName,
-        orderNo: response.orderNo,
-        items: response.items,
-        paidAmount: response.paidAmount,
-        providedMinutes: response.providedMinutes,
+        setPortalOrder({
+          orderClaim: claimForDemo,
+          storeName: response.storeName,
+          orderNo: response.orderNo,
+          items: response.items,
+          paidAmount: response.paidAmount,
+          providedMinutes: response.providedMinutes,
+        })
+        setVerificationTicket(response.verificationTicket)
+        setPassId(response.passId ?? '')
+        setSecondsLeft(response.providedMinutes * 60)
       })
-      setVerificationTicket(response.verificationTicket)
-      setPassId(response.passId ?? '')
-      setSecondsLeft(response.providedMinutes * 60)
-    })
+      .catch((error) => {
+        if (isCanceled) return
+
+        if (isRecoverableClaimError(error)) {
+          goToScreen('blocked', { replace: true, clearOrderClaim: true })
+          return
+        }
+
+        goToScreen('error', { replace: true, clearOrderClaim: true })
+      })
 
     return () => {
       isCanceled = true
@@ -329,6 +342,7 @@ export function CustomerPortalPage() {
       setPassId(response.passId ?? '')
       setOtpVerified(true)
       window.sessionStorage.setItem('portalSession', response.portalSession)
+      window.sessionStorage.setItem('portalPhone', guestPhone)
       if (response.passId) {
         window.sessionStorage.setItem('portalPassId', response.passId)
       }
@@ -343,15 +357,24 @@ export function CustomerPortalPage() {
   const handleActivatePass = async () => {
     if (!canStartWifi || !passId) return
 
-    const savedSession = window.sessionStorage.getItem('portalSession') ?? ''
-    const response = await customerPortalService.activatePass({
-      passId,
-      portalSession: savedSession,
-    })
+    try {
+      const savedSession = window.sessionStorage.getItem('portalSession') ?? ''
+      const response = await customerPortalService.activatePass({
+        passId,
+        portalSession: savedSession,
+      })
 
-    setActivePass(response)
-    setSecondsLeft(response.remainingSeconds)
-    goToScreen('active')
+      setActivePass(response)
+      setSecondsLeft(response.remainingSeconds)
+      goToScreen('active')
+    } catch (error) {
+      if (isBlockedPassError(error)) {
+        goToScreen('blocked', { replace: true, clearOrderClaim: true })
+        return
+      }
+
+      goToScreen('error', { replace: true, clearOrderClaim: true })
+    }
   }
 
   const handleChooseReward = async (fulfillMode: RewardFulfillMode) => {
@@ -469,7 +492,9 @@ export function CustomerPortalPage() {
           />
         )}
         {screen === 'coupons' && <CouponsScreen couponCount={couponCount} />}
-        {screen === 'extend' && <ExtendScreen />}
+        {screen === 'extend' && (
+          <ExtendScreen onAdditionalOrder={() => navigate('/app/demo-pos?mode=extend')} />
+        )}
         {screen === 'expired' && (
           <ExpiredScreen
             onExtend={() => goToScreen('extend')}
@@ -869,7 +894,7 @@ function CouponsScreen({ couponCount }: { couponCount: number }) {
   )
 }
 
-function ExtendScreen() {
+function ExtendScreen({ onAdditionalOrder }: { onAdditionalOrder: () => void }) {
   return (
     <PortalScreen eyebrow="EXTEND">
       <h1>추가 주문하시면 이용 시간이 늘어납니다</h1>
@@ -896,6 +921,9 @@ function ExtendScreen() {
           </div>
         ))}
       </section>
+      <button type="button" className="portal-button primary" onClick={onAdditionalOrder}>
+        Demo POS에서 추가 주문하기
+      </button>
     </PortalScreen>
   )
 }
@@ -1135,9 +1163,35 @@ function getInitialScreen({
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : '요청 처리 중 문제가 발생했습니다.'
+  if (error instanceof ApiError) {
+    return getApiErrorDetail(error) ?? '요청 처리 중 문제가 발생했습니다.'
+  }
+
+  return error instanceof Error ? error.message : '요청 처리 중 문제가 발생했습니다.'
+}
+
+function getApiErrorDetail(error: ApiError) {
+  if (!error.body || typeof error.body !== 'object') return null
+
+  const body = error.body as {
+    detail?: unknown
+    message?: unknown
+    error?: { message?: unknown }
+  }
+
+  if (typeof body.detail === 'string') return body.detail
+  if (typeof body.message === 'string') return body.message
+  if (typeof body.error?.message === 'string') return body.error.message
+
+  return null
+}
+
+function isRecoverableClaimError(error: unknown) {
+  return error instanceof ApiError && [404, 409, 410, 422].includes(error.status)
+}
+
+function isBlockedPassError(error: unknown) {
+  return error instanceof ApiError && [401, 403, 404, 409, 410, 422].includes(error.status)
 }
 
 function readStoredRewardGrantIds() {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { posApi } from '../../api/pos'
 import { env, isApiConfigured } from '../../config/env'
 
@@ -7,21 +7,32 @@ const demoMenus = [
   {
     id: 'americano',
     name: '아메리카노',
-    price: 4500,
+    price: 5000,
   },
   {
     id: 'cake',
-    name: '케이크',
-    price: 4000,
+    name: '딸기케이크',
+    price: 7000,
+  },
+  {
+    id: 'latte',
+    name: '카페라떼',
+    price: 6000,
   },
 ]
 
 export function DemoPosPage() {
   const navigate = useNavigate()
-  const [selectedIds, setSelectedIds] = useState<string[]>(['americano', 'cake'])
+  const [searchParams] = useSearchParams()
+  const isExtendMode = searchParams.get('mode') === 'extend'
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    isExtendMode ? ['americano'] : ['americano', 'cake'],
+  )
   const [storeId, setStoreId] = useState(env.demoStoreId)
   const [productId, setProductId] = useState(env.demoProductId)
-  const [phone, setPhone] = useState('01011111111')
+  const [phone, setPhone] = useState(
+    window.sessionStorage.getItem('portalPhone') ?? '01011111111',
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -47,8 +58,11 @@ export function DemoPosPage() {
     setIsSubmitting(true)
 
     try {
+      const normalizedPhone = phone.replace(/\D/g, '')
+      window.sessionStorage.setItem('portalPhone', normalizedPhone)
+
       if (!canUseApi) {
-        navigate(`/connect?orderClaim=demo-${Date.now()}`)
+        navigate(isExtendMode ? '/connect?screen=active' : `/connect?orderClaim=demo-${Date.now()}`)
         return
       }
 
@@ -59,9 +73,9 @@ export function DemoPosPage() {
 
       const response = await posApi.createOrder({
         storeId: storeId.trim(),
-        externalOrderId: `DEMO-${Date.now()}`,
+        externalOrderId: `${isExtendMode ? 'EXTEND' : 'DEMO'}-${Date.now()}`,
         customer: {
-          phone: phone.replace(/\D/g, ''),
+          phone: normalizedPhone,
         },
         items: [
           {
@@ -78,6 +92,12 @@ export function DemoPosPage() {
         'portalRewardGrantIds',
         JSON.stringify(response.newRewardGrantIds),
       )
+
+      if (isExtendMode) {
+        navigate('/connect?screen=active')
+        return
+      }
+
       navigate(`/connect?orderClaim=${encodeURIComponent(response.orderClaim.token)}`)
     } catch (error) {
       setErrorMessage(
@@ -100,12 +120,18 @@ export function DemoPosPage() {
 
         <div className="demo-pos__content">
           <div>
-            <span className="demo-pos__eyebrow">주문 생성</span>
-            <h1>주문 후 고객 QR을 발급합니다</h1>
+            <span className="demo-pos__eyebrow">
+              {isExtendMode ? '추가 주문' : '주문 생성'}
+            </span>
+            <h1>
+              {isExtendMode
+                ? '추가 주문으로 이용 시간을 연장합니다'
+                : '주문 후 고객 QR을 발급합니다'}
+            </h1>
             <p>
-              MVP 시연용 POS 화면입니다. 주문을 생성하면 Customer Portal의
-              <br />
-              <code>/connect?orderClaim=...</code> 흐름으로 이동합니다.
+              {isExtendMode
+                ? '같은 전화번호로 주문하면 백엔드가 기존 이용권 시간을 자동으로 늘립니다.'
+                : 'MVP 시연용 POS 화면입니다. 주문을 생성하면 Customer Portal의 QR 흐름으로 이동합니다.'}
             </p>
           </div>
 
@@ -133,8 +159,8 @@ export function DemoPosPage() {
               <strong>{totalAmount.toLocaleString()}원</strong>
             </div>
             <div>
-              <span>제공 이용권</span>
-              <strong>2시간 기본</strong>
+              <span>{isExtendMode ? '연장 방식' : '제공 이용권'}</span>
+              <strong>{isExtendMode ? '기존 이용권 자동 연장' : '2시간 기본'}</strong>
             </div>
           </div>
 
@@ -171,7 +197,11 @@ export function DemoPosPage() {
             disabled={isSubmitting}
             onClick={handleCreateOrder}
           >
-            {isSubmitting ? '주문표 생성 중' : '주문표 QR 생성'}
+            {isSubmitting
+              ? '주문 처리 중'
+              : isExtendMode
+                ? '추가 주문 완료'
+                : '주문표 QR 생성'}
           </button>
         </div>
       </section>
