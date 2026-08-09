@@ -41,6 +41,13 @@ type DisplayRewardOption = {
   recommended: boolean
 }
 
+type PortalErrorInfo = {
+  title: string
+  message: string
+  requestId: string
+  status?: number
+}
+
 export function CustomerPortalPage() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -89,12 +96,16 @@ export function CustomerPortalPage() {
   >([])
   const [rewardError, setRewardError] = useState('')
   const [couponCount, setCouponCount] = useState(0)
+  const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
 
   const goToScreen = (
     nextScreen: Screen,
     options?: { replace?: boolean; clearOrderClaim?: boolean },
   ) => {
     setScreen(nextScreen)
+    if (nextScreen !== 'blocked' && nextScreen !== 'error') {
+      setLastPortalError(null)
+    }
 
     if (!isConnectRoute) return
 
@@ -168,6 +179,7 @@ export function CustomerPortalPage() {
       })
       .catch((error) => {
         if (isCanceled) return
+        setLastPortalError(toPortalErrorInfo(error, 'CLAIM_EXCHANGE'))
 
         if (isRecoverableClaimError(error)) {
           goToScreen('blocked', { replace: true, clearOrderClaim: true })
@@ -368,6 +380,7 @@ export function CustomerPortalPage() {
       setSecondsLeft(response.remainingSeconds)
       goToScreen('active')
     } catch (error) {
+      setLastPortalError(toPortalErrorInfo(error, 'PASS_ACTIVATE'))
       if (isBlockedPassError(error)) {
         goToScreen('blocked', { replace: true, clearOrderClaim: true })
         return
@@ -503,11 +516,17 @@ export function CustomerPortalPage() {
         )}
         {screen === 'blocked' && (
           <BlockedScreen
+            errorInfo={lastPortalError}
             onReconnect={() => goToScreen(orderClaim ? 'qr' : 'claimMissing')}
             onPrivacy={() => goToScreen('privacy')}
           />
         )}
-        {screen === 'error' && <ErrorScreen onRetry={() => goToScreen('active')} />}
+        {screen === 'error' && (
+          <ErrorScreen
+            errorInfo={lastPortalError}
+            onRetry={() => goToScreen('active')}
+          />
+        )}
         {screen === 'privacy' && <PrivacyScreen onBack={() => goToScreen('active')} />}
       </section>
     </main>
@@ -954,19 +973,22 @@ function ExpiredScreen({
 }
 
 function BlockedScreen({
+  errorInfo,
   onReconnect,
   onPrivacy,
 }: {
+  errorInfo: PortalErrorInfo | null
   onReconnect: () => void
   onPrivacy: () => void
 }) {
   return (
     <PortalScreen eyebrow="/blocked">
-      <h1>이용권 연결을 다시 확인해 주세요</h1>
+      <h1>{errorInfo?.title ?? '이용권 연결을 다시 확인해 주세요'}</h1>
       <p className="screen-copy dark">
-        이 기기에서 이용권을 확인하지 못했습니다. 주문표 QR을 다시
-        스캔하시거나 직원에게 말씀해 주세요.
+        {errorInfo?.message ??
+          '이 기기에서 이용권을 확인하지 못했습니다. 주문표 QR을 다시 스캔하시거나 직원에게 말씀해 주세요.'}
       </p>
+      {errorInfo && <RequestInfoCard errorInfo={errorInfo} />}
       <section className="notice-panel">
         <strong>확인해 볼 항목</strong>
         <p>· 주문표에 인쇄된 QR을 다시 스캔해 주세요.</p>
@@ -983,22 +1005,37 @@ function BlockedScreen({
   )
 }
 
-function ErrorScreen({ onRetry }: { onRetry: () => void }) {
+function ErrorScreen({
+  errorInfo,
+  onRetry,
+}: {
+  errorInfo: PortalErrorInfo | null
+  onRetry: () => void
+}) {
   return (
     <PortalScreen eyebrow="/error">
-      <h1>잠시 후 다시 시도해 주세요</h1>
+      <h1>{errorInfo?.title ?? '잠시 후 다시 시도해 주세요'}</h1>
       <p className="screen-copy dark">
-        이용권 정보를 불러오지 못했습니다. 남은 이용 시간은 그대로 유지되며,
-        직원에게 말씀하시면 바로 확인해 드립니다.
+        {errorInfo?.message ??
+          '이용권 정보를 불러오지 못했습니다. 남은 이용 시간은 그대로 유지되며, 직원에게 말씀하시면 바로 확인해 드립니다.'}
       </p>
-      <section className="request-card">
-        <strong>요청 ID</strong>
-        <span>req_7f21c9 · 14:31:08</span>
-      </section>
+      {errorInfo && <RequestInfoCard errorInfo={errorInfo} />}
       <button type="button" className="portal-button primary" onClick={onRetry}>
         다시 시도
       </button>
     </PortalScreen>
+  )
+}
+
+function RequestInfoCard({ errorInfo }: { errorInfo: PortalErrorInfo }) {
+  return (
+    <section className="request-card">
+      <strong>요청 정보</strong>
+      <span>
+        {errorInfo.requestId}
+        {errorInfo.status ? ` · HTTP ${errorInfo.status}` : ''}
+      </span>
+    </section>
   )
 }
 
@@ -1170,18 +1207,71 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '요청 처리 중 문제가 발생했습니다.'
 }
 
-function getApiErrorDetail(error: ApiError) {
-  if (!error.body || typeof error.body !== 'object') return null
+function toPortalErrorInfo(error: unknown, fallbackCode: string): PortalErrorInfo {
+  if (error instanceof ApiError) {
+    const body = getApiErrorBody(error)
+    const title =
+      getStringValue(body?.title) ??
+      getPortalErrorTitle(error.status) ??
+      '요청을 처리하지 못했습니다'
+    const message =
+      getStringValue(body?.detail) ??
+      getStringValue(body?.message) ??
+      '주문표 QR 또는 이용권 상태를 다시 확인해 주세요.'
+    const requestId =
+      getStringValue(body?.requestId) ??
+      getStringValue(body?.meta?.requestId) ??
+      `local_${fallbackCode.toLowerCase()}`
 
-  const body = error.body as {
-    detail?: unknown
-    message?: unknown
-    error?: { message?: unknown }
+    return {
+      title,
+      message,
+      requestId,
+      status: error.status,
+    }
   }
 
-  if (typeof body.detail === 'string') return body.detail
-  if (typeof body.message === 'string') return body.message
-  if (typeof body.error?.message === 'string') return body.error.message
+  return {
+    title: '요청을 처리하지 못했습니다',
+    message: getErrorMessage(error),
+    requestId: `local_${fallbackCode.toLowerCase()}`,
+  }
+}
+
+function getApiErrorDetail(error: ApiError) {
+  const body = getApiErrorBody(error)
+  if (!body) return null
+
+  return (
+    getStringValue(body.detail) ??
+    getStringValue(body.message) ??
+    getStringValue(body.error?.message)
+  )
+}
+
+function getApiErrorBody(error: ApiError) {
+  if (!error.body || typeof error.body !== 'object') return null
+
+  return error.body as {
+    detail?: unknown
+    message?: unknown
+    title?: unknown
+    requestId?: unknown
+    meta?: { requestId?: unknown }
+    error?: { message?: unknown }
+  }
+}
+
+function getStringValue(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function getPortalErrorTitle(status: number) {
+  if (status === 401 || status === 403) return '본인 확인이 다시 필요합니다'
+  if (status === 404 || status === 410) return '주문표 QR을 다시 확인해 주세요'
+  if (status === 409) return '이미 처리된 이용권입니다'
+  if (status === 422) return '입력 정보를 다시 확인해 주세요'
+  if (status >= 500) return '잠시 후 다시 시도해 주세요'
 
   return null
 }
