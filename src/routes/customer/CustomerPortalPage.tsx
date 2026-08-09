@@ -99,6 +99,7 @@ export function CustomerPortalPage() {
   const [couponCount, setCouponCount] = useState(0)
   const [coupons, setCoupons] = useState<CustomerCoupon[]>([])
   const [couponError, setCouponError] = useState('')
+  const [isCouponLoading, setIsCouponLoading] = useState(false)
   const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
 
   const goToScreen = (
@@ -314,6 +315,7 @@ export function CustomerPortalPage() {
     const savedSession = window.sessionStorage.getItem('portalSession')
     if (!savedSession) return
 
+    setIsCouponLoading(true)
     customerPortalService
       .listCoupons({ portalSession: savedSession })
       .then((response) => {
@@ -323,6 +325,9 @@ export function CustomerPortalPage() {
       })
       .catch((error) => {
         setCouponError(getErrorMessage(error))
+      })
+      .finally(() => {
+        setIsCouponLoading(false)
       })
   }, [screen])
 
@@ -433,6 +438,17 @@ export function CustomerPortalPage() {
       setRewardError('')
 
       if (response.coupon) {
+        const savedCoupon = response.coupon
+        setCoupons((current) => [
+          {
+            couponId: savedCoupon.couponId,
+            status: savedCoupon.status,
+            benefit: response.benefit,
+            expiresAt: savedCoupon.expiresAt,
+            redeemedAt: null,
+          },
+          ...current,
+        ])
         setCouponCount((count) => count + 1)
         goToScreen('coupons')
         return
@@ -558,6 +574,7 @@ export function CustomerPortalPage() {
             coupons={coupons}
             couponCount={couponCount}
             errorMessage={couponError}
+            isLoading={isCouponLoading}
             onRedeemCoupon={handleRedeemCoupon}
           />
         )}
@@ -827,7 +844,7 @@ function ActiveScreen({
     ? Math.min(100, Math.round((dailyTotal / nextTierAmount) * 100))
     : 100
   const benefitsPreview =
-    upsellHint?.nextTierBenefitsPreview?.join(' · ') ??
+    upsellHint?.nextTierBenefitsPreview?.map(formatBenefitLabel).join(' · ') ??
     'Wi-Fi 종일권 · 음료 할인 · 신메뉴 시식권'
   const endTimeLabel = useMemo(
     () => formatShortTime(pass ? new Date(pass.expiresAt) : currentTime),
@@ -957,18 +974,25 @@ function CouponsScreen({
   coupons,
   couponCount,
   errorMessage,
+  isLoading,
   onRedeemCoupon,
 }: {
   coupons: CustomerCoupon[]
   couponCount: number
   errorMessage: string
+  isLoading: boolean
   onRedeemCoupon: (couponId: string) => void
 }) {
   return (
     <PortalScreen eyebrow="COUPONS">
       <h1>쿠폰함 {couponCount}장</h1>
       <p className="screen-copy">저장한 쿠폰은 7일 이내에 사용할 수 있습니다.</p>
-      {coupons.length === 0 ? (
+      {isLoading && coupons.length === 0 ? (
+        <section className="notice-panel">
+          <strong>쿠폰을 불러오는 중입니다</strong>
+          <p>잠시만 기다려 주세요.</p>
+        </section>
+      ) : coupons.length === 0 ? (
         <section className="notice-panel">
           <strong>저장된 쿠폰이 없습니다</strong>
           <p>리워드 선택 화면에서 쿠폰으로 저장하면 이곳에 표시됩니다.</p>
@@ -1400,6 +1424,18 @@ function getRewardDescription(option: RewardOption) {
   }
 
   return descriptions[option.type] ?? '선택 가능한 리워드 혜택입니다'
+}
+
+function formatBenefitLabel(value: string) {
+  const labels: Record<string, string> = {
+    FREE_SIZE_UP: '무료 사이즈업',
+    FREE_SHOT: '샷 추가',
+    DESSERT_DISCOUNT: '디저트 할인',
+    WIFI_DAY_PASS: 'Wi-Fi 종일권',
+    DRINK_DISCOUNT: '음료 할인',
+  }
+
+  return labels[value] ?? value
 }
 
 function getCouponTitle(coupon: CustomerCoupon) {
