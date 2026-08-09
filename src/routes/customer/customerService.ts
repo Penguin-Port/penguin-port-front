@@ -1,6 +1,8 @@
 import {
   customerApi,
   type CustomerPass,
+  type CustomerCoupon,
+  type CouponRedeemResponse,
   type OrderClaimExchangeResponse,
   type OtpConfirmResponse,
   type OtpSendResponse,
@@ -49,6 +51,13 @@ export type CustomerPortalService = {
     fulfillMode: RewardFulfillMode
     portalSession: string
   }): Promise<RewardChooseResponse>
+  listCoupons(input: {
+    portalSession: string
+  }): Promise<CustomerCoupon[]>
+  redeemCoupon(input: {
+    couponId: string
+    portalSession: string
+  }): Promise<CouponRedeemResponse>
 }
 
 const mockCustomerService: CustomerPortalService = {
@@ -122,6 +131,30 @@ const mockCustomerService: CustomerPortalService = {
           : null,
     })
   },
+  listCoupons() {
+    return Promise.resolve([
+      {
+        couponId: 'mock-coupon-dessert',
+        status: 'AVAILABLE',
+        benefit: {
+          title: '디저트 10% 할인',
+          benefitType: 'DESSERT_DISCOUNT',
+        },
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        redeemedAt: null,
+      },
+    ])
+  },
+  redeemCoupon({ couponId }) {
+    return Promise.resolve({
+      couponId,
+      status: 'REDEEMED',
+      redeemedAt: new Date().toISOString(),
+      benefit: {
+        title: '디저트 10% 할인',
+      },
+    })
+  },
 }
 
 const apiCustomerService: CustomerPortalService = {
@@ -148,6 +181,12 @@ const apiCustomerService: CustomerPortalService = {
   },
   chooseReward({ grantId, benefitId, fulfillMode, portalSession }) {
     return customerApi.chooseReward(grantId, { benefitId, fulfillMode }, portalSession)
+  },
+  listCoupons({ portalSession }) {
+    return customerApi.listCoupons(portalSession)
+  },
+  redeemCoupon({ couponId, portalSession }) {
+    return customerApi.redeemCoupon(couponId, portalSession)
   },
 }
 

@@ -115,6 +115,21 @@ export interface RewardChooseResponse {
   } | null
 }
 
+export interface CustomerCoupon {
+  couponId: string
+  status: string
+  benefit: Record<string, unknown>
+  expiresAt: string
+  redeemedAt: string | null
+}
+
+export interface CouponRedeemResponse {
+  couponId: string
+  status: string
+  redeemedAt: string
+  benefit: Record<string, unknown>
+}
+
 function portalSessionHeaders(portalSession: string) {
   return { 'X-Portal-Session': portalSession }
 }
@@ -179,6 +194,22 @@ export const customerApi = {
       {
         method: 'POST',
         body: JSON.stringify(body),
+        headers: portalSessionHeaders(portalSession),
+      },
+    )
+  },
+
+  listCoupons(portalSession: string) {
+    return apiDataRequest<CustomerCoupon[]>('/public/coupons', {
+      headers: portalSessionHeaders(portalSession),
+    })
+  },
+
+  redeemCoupon(couponId: string, portalSession: string) {
+    return apiDataRequest<CouponRedeemResponse>(
+      `/public/coupons/${couponId}/redeem`,
+      {
+        method: 'POST',
         headers: portalSessionHeaders(portalSession),
       },
     )

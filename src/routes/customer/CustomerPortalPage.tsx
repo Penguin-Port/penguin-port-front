@@ -10,6 +10,7 @@ import {
 import { customerPortalService } from './customerService'
 import type { PortalOrder, Screen } from './customerTypes'
 import type {
+  CustomerCoupon,
   CustomerPass,
   CustomerPassStatus,
   RewardFulfillMode,
@@ -96,6 +97,8 @@ export function CustomerPortalPage() {
   >([])
   const [rewardError, setRewardError] = useState('')
   const [couponCount, setCouponCount] = useState(0)
+  const [coupons, setCoupons] = useState<CustomerCoupon[]>([])
+  const [couponError, setCouponError] = useState('')
   const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
 
   const goToScreen = (
@@ -305,6 +308,24 @@ export function CustomerPortalPage() {
       })
   }, [rewardGrantIds, screen])
 
+  useEffect(() => {
+    if (screen !== 'coupons') return
+
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    if (!savedSession) return
+
+    customerPortalService
+      .listCoupons({ portalSession: savedSession })
+      .then((response) => {
+        setCoupons(response)
+        setCouponCount(response.filter((coupon) => coupon.status === 'AVAILABLE').length)
+        setCouponError('')
+      })
+      .catch((error) => {
+        setCouponError(getErrorMessage(error))
+      })
+  }, [screen])
+
   const canSendOtp =
     guestPhone.length === 11 && cooldownSeconds === 0 && !isOtpSubmitting
   const canConfirmOtp = otpCode.length === 6 && !isOtpSubmitting
@@ -423,6 +444,34 @@ export function CustomerPortalPage() {
     }
   }
 
+  const handleRedeemCoupon = async (couponId: string) => {
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    if (!savedSession) return
+
+    try {
+      const response = await customerPortalService.redeemCoupon({
+        couponId,
+        portalSession: savedSession,
+      })
+
+      setCoupons((current) =>
+        current.map((coupon) =>
+          coupon.couponId === couponId
+            ? {
+                ...coupon,
+                status: response.status,
+                redeemedAt: response.redeemedAt,
+              }
+            : coupon,
+        ),
+      )
+      setCouponCount((count) => Math.max(0, count - 1))
+      setCouponError('')
+    } catch (error) {
+      setCouponError(getErrorMessage(error))
+    }
+  }
+
   return (
     <main className="customer-portal">
       <section className="portal-phone" aria-label="팽귄포트 고객 포털">
@@ -504,7 +553,14 @@ export function CustomerPortalPage() {
             errorMessage={rewardError}
           />
         )}
-        {screen === 'coupons' && <CouponsScreen couponCount={couponCount} />}
+        {screen === 'coupons' && (
+          <CouponsScreen
+            coupons={coupons}
+            couponCount={couponCount}
+            errorMessage={couponError}
+            onRedeemCoupon={handleRedeemCoupon}
+          />
+        )}
         {screen === 'extend' && (
           <ExtendScreen onAdditionalOrder={() => navigate('/app/demo-pos?mode=extend')} />
         )}
@@ -897,18 +953,44 @@ function RewardScreen({
   )
 }
 
-function CouponsScreen({ couponCount }: { couponCount: number }) {
+function CouponsScreen({
+  coupons,
+  couponCount,
+  errorMessage,
+  onRedeemCoupon,
+}: {
+  coupons: CustomerCoupon[]
+  couponCount: number
+  errorMessage: string
+  onRedeemCoupon: (couponId: string) => void
+}) {
   return (
     <PortalScreen eyebrow="COUPONS">
       <h1>쿠폰함 {couponCount}장</h1>
       <p className="screen-copy">저장한 쿠폰은 7일 이내에 사용할 수 있습니다.</p>
-      <section className="coupon-card">
-        <span>
-          <strong>디저트 10% 할인</strong>
-          <small>8월 5일까지 사용</small>
-        </span>
-        <button type="button">사용</button>
-      </section>
+      {coupons.length === 0 ? (
+        <section className="notice-panel">
+          <strong>저장된 쿠폰이 없습니다</strong>
+          <p>리워드 선택 화면에서 쿠폰으로 저장하면 이곳에 표시됩니다.</p>
+        </section>
+      ) : (
+        coupons.map((coupon) => (
+          <section className="coupon-card" key={coupon.couponId}>
+            <span>
+              <strong>{getCouponTitle(coupon)}</strong>
+              <small>{getCouponMeta(coupon)}</small>
+            </span>
+            <button
+              type="button"
+              disabled={coupon.status !== 'AVAILABLE'}
+              onClick={() => onRedeemCoupon(coupon.couponId)}
+            >
+              {coupon.status === 'AVAILABLE' ? '사용' : getCouponStatusLabel(coupon.status)}
+            </button>
+          </section>
+        ))
+      )}
+      {errorMessage && <p className="form-error">{errorMessage}</p>}
     </PortalScreen>
   )
 }
@@ -1320,6 +1402,38 @@ function getRewardDescription(option: RewardOption) {
   return descriptions[option.type] ?? '선택 가능한 리워드 혜택입니다'
 }
 
+function getCouponTitle(coupon: CustomerCoupon) {
+  const title = coupon.benefit.title
+  if (typeof title === 'string') return title
+
+  const benefitType = coupon.benefit.benefitType
+  if (benefitType === 'DESSERT_DISCOUNT') return '디저트 할인'
+  if (benefitType === 'DRINK_DISCOUNT') return '음료 할인'
+  if (benefitType === 'FREE_SIZE_UP') return '무료 사이즈업'
+
+  return '리워드 쿠폰'
+}
+
+function getCouponMeta(coupon: CustomerCoupon) {
+  if (coupon.status === 'REDEEMED' && coupon.redeemedAt) {
+    return `${formatShortDate(new Date(coupon.redeemedAt))} 사용 완료`
+  }
+
+  if (coupon.status === 'EXPIRED') return '만료된 쿠폰'
+
+  return `${formatShortDate(new Date(coupon.expiresAt))}까지 사용`
+}
+
+function getCouponStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    REDEEMED: '사용 완료',
+    EXPIRED: '만료',
+    REVOKED: '취소',
+  }
+
+  return labels[status] ?? status
+}
+
 function getEffectivePassStatus(
   status: CustomerPassStatus,
   secondsLeft: number,
@@ -1373,6 +1487,13 @@ function formatShortTime(date: Date) {
     hour: 'numeric',
     minute: '2-digit',
     hour12: false,
+  }).format(date)
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
   }).format(date)
 }
 

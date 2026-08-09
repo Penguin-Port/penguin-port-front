@@ -538,6 +538,11 @@
   cursor: pointer;
 }
 
+.customer-portal .coupon-card button:disabled {
+  background: #aaaaaa;
+  cursor: not-allowed;
+}
+
 .customer-portal .tier-item span {
   color: #1a1a1a;
   font-size: 14px;
