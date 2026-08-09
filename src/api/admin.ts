@@ -44,6 +44,7 @@ async function login() {
 
   const response = await apiRequest<AdminLoginResponse>('/admin/login', {
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({
       username: env.adminUsername,
       password: env.adminPassword,
@@ -54,10 +55,7 @@ async function login() {
   return response.data
 }
 
-async function getSession() {
-  const session = readAdminSession()
-  if (session) return session
-
+async function establishSession() {
   if (!loginPromise) {
     loginPromise = login().finally(() => {
       loginPromise = null
@@ -65,6 +63,13 @@ async function getSession() {
   }
 
   return loginPromise
+}
+
+async function getSession() {
+  const session = readAdminSession()
+  if (session) return session
+
+  return establishSession()
 }
 
 async function authenticatedRequest<T>(
@@ -77,6 +82,7 @@ async function authenticatedRequest<T>(
   try {
     const response = await apiRequest<T>(path, {
       ...options,
+      credentials: 'include',
       headers: {
         Authorization: `Bearer ${session.accessToken}`,
         ...options?.headers,
@@ -115,6 +121,22 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ storeId: session.storeId }),
     })
+  },
+
+  async blockPass(passId: string, reason = '관리자 화면에서 수동 차단') {
+    const session = await getSession()
+    return authenticatedRequest<AdminPassResponse>(`/admin/passes/${passId}/block`, {
+      method: 'POST',
+      body: JSON.stringify({ storeId: session.storeId, reason }),
+    })
+  },
+
+  async getEventStreamUrl() {
+    // native EventSource는 Authorization 헤더를 보낼 수 없으므로
+    // 저장된 토큰과 별개로 HttpOnly 인증 쿠키를 확실히 재발급합니다.
+    const session = await establishSession()
+    const query = new URLSearchParams({ storeId: session.storeId })
+    return `${env.apiBaseUrl}/admin/events?${query.toString()}`
   },
 
   async getSalesSummary(signal?: AbortSignal) {

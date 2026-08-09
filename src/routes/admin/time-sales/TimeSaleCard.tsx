@@ -38,7 +38,6 @@ export function TimeSaleCard({
             {STATUS_LABELS[recommendation.status]}
           </span>
           <span className={`recommendation-source ${source.tone}`}>{source.label}</span>
-          <span>근거 · {recommendation.reasons.join(' · ')}</span>
         </div>
         <h2>{recommendation.menu} {recommendation.discountRate}% 할인</h2>
         <div className="time-sale-details">
@@ -48,13 +47,16 @@ export function TimeSaleCard({
         <button className="time-sale-detail-trigger" onClick={() => onOpenDetail(recommendation.id)}>추천 상세 보기 <span>→</span></button>
       </div>
 
-      {isReview && (
-        <div className="time-sale-actions">
-          <button className="approve" disabled={isPending} onClick={() => onApprove(recommendation.id)}>{isPending ? '처리 중' : '승인'}</button>
-          <button disabled={isPending} onClick={() => onEdit(recommendation.id)}>수정</button>
-          <button disabled={isPending} onClick={() => onReject(recommendation.id)}>거절</button>
-        </div>
-      )}
+      <div className="time-sale-side">
+        <p className="time-sale-reason">근거 · {recommendation.reasons.join(' · ')}</p>
+        {isReview && (
+          <div className="time-sale-actions">
+            <button className="approve" disabled={isPending} onClick={() => onApprove(recommendation.id)}>{isPending ? '처리 중' : '승인'}</button>
+            <button disabled={isPending} onClick={() => onEdit(recommendation.id)}>수정</button>
+            <button disabled={isPending} onClick={() => onReject(recommendation.id)}>거절</button>
+          </div>
+        )}
+      </div>
     </article>
   )
 }

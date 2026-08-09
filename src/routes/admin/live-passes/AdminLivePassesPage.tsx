@@ -4,6 +4,7 @@ import { ConfirmModal, EmptyState, ErrorState, LoadingState, useToast } from '..
 import { isApiConfigured } from '../../../config/env'
 import { LIVE_PASSES } from '../../../constants/adminLivePasses'
 import { ADMIN_ROUTES } from '../../../constants/adminRoutes'
+import { useAdminEventStream } from '../../../hooks/useAdminEventStream'
 import type { LivePass } from '../../../types/admin'
 import { mapApiPass } from '../../../utils/adminApiMappers'
 import { LivePassesTable } from './LivePassesTable'
@@ -16,6 +17,7 @@ export function AdminLivePassesPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [pendingPassId, setPendingPassId] = useState<string | null>(null)
   const [expireTargetId, setExpireTargetId] = useState<string | null>(null)
+  const [blockTargetId, setBlockTargetId] = useState<string | null>(null)
 
   const loadPasses = useCallback(async (signal?: AbortSignal, showLoading = false) => {
     if (!isApiConfigured) return
@@ -33,15 +35,21 @@ export function AdminLivePassesPage() {
     }
   }, [])
 
+  const eventStreamStatus = useAdminEventStream(() => void loadPasses(), isApiConfigured)
+
   useEffect(() => {
     const controller = new AbortController()
     void loadPasses(controller.signal)
-    const intervalId = window.setInterval(() => void loadPasses(), 10_000)
     return () => {
       controller.abort()
-      window.clearInterval(intervalId)
     }
   }, [loadPasses])
+
+  useEffect(() => {
+    if (!isApiConfigured || eventStreamStatus === 'connected') return
+    const intervalId = window.setInterval(() => void loadPasses(), 10_000)
+    return () => window.clearInterval(intervalId)
+  }, [eventStreamStatus, loadPasses])
 
   const extendPass = async (passId: string) => {
     setPendingPassId(passId)
@@ -72,15 +80,39 @@ export function AdminLivePassesPage() {
     }
   }
 
+  const blockPass = async (passId: string) => {
+    setPendingPassId(passId)
+    try {
+      await adminApi.blockPass(passId)
+      setPasses((current) => current.filter((pass) => pass.id !== passId))
+      await loadPasses()
+      showToast('이용권을 차단하고 Wi-Fi 연결을 해제했습니다.', 'success')
+      setBlockTargetId(null)
+    } catch {
+      setErrorMessage('이용권 차단에 실패했습니다. 권한과 이용권 상태를 확인해주세요.')
+      showToast('이용권 차단에 실패했습니다.', 'error')
+    } finally {
+      setPendingPassId(null)
+    }
+  }
+
+  const streamLabel = eventStreamStatus === 'connected'
+    ? `SSE 실시간 연결 · ${lastUpdatedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
+    : eventStreamStatus === 'connecting'
+      ? '실시간 연결 중'
+      : eventStreamStatus === 'polling'
+        ? `SSE 재연결 중 · 10초 갱신 · ${lastUpdatedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
+        : '데모 데이터'
+
   return (
     <>
       <section className="live-passes-heading">
         <div>
           <p className="eyebrow">LIVE PASSES <span>/ {ADMIN_ROUTES.livePasses.slice(1)}</span></p>
           <h1>실시간 이용권</h1>
-          <p>서버 시간 기준 잔여 시간입니다. 활성 이용권 목록은 10초마다 자동 갱신됩니다.</p>
+          <p>서버 시간 기준 잔여 시간입니다. 변경 이벤트를 실시간으로 반영하며 연결이 끊기면 10초 갱신으로 전환합니다.</p>
         </div>
-        <span className="polling-badge"><i /> {isLoading ? '연결 중' : `10초마다 갱신 · ${lastUpdatedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`}</span>
+        <span className={`polling-badge ${eventStreamStatus === 'polling' ? 'is-fallback' : ''}`}><i /> {isLoading ? '연결 중' : streamLabel}</span>
       </section>
 
       {!isApiConfigured && <p className="api-feedback">백엔드 미연동 모드 · `.env`에 VITE_API_BASE_URL을 설정하면 실제 데이터를 불러옵니다.</p>}
@@ -101,10 +133,22 @@ export function AdminLivePassesPage() {
             isApiConnected={isApiConfigured}
             pendingPassId={pendingPassId}
             onExtend={extendPass}
+            onBlock={setBlockTargetId}
             onExpire={setExpireTargetId}
           />
         </>
       )}
+
+      <ConfirmModal
+        isOpen={blockTargetId !== null}
+        title="이용권을 즉시 차단할까요?"
+        description="차단 즉시 Demo Wi-Fi 세션을 해제하고 이용권 상태를 BLOCKED로 변경합니다. 이 작업은 감사 로그에 기록됩니다."
+        confirmLabel="이용권 차단"
+        tone="danger"
+        isPending={blockTargetId !== null && pendingPassId === blockTargetId}
+        onClose={() => setBlockTargetId(null)}
+        onConfirm={() => blockTargetId && void blockPass(blockTargetId)}
+      />
 
       <ConfirmModal
         isOpen={expireTargetId !== null}

@@ -47,9 +47,16 @@ export function mapApiPass(pass: AdminPassResponse, serverTime: string): LivePas
   const now = new Date(serverTime).getTime()
   const issuedAt = new Date(pass.issuedAt).getTime()
   const expiresAt = new Date(pass.expiresAt).getTime()
-  const remainingMinutes = Math.max(0, Math.ceil((expiresAt - now) / 60_000))
+  const remainingMinutes = Math.max(
+    0,
+    Math.ceil(
+      typeof pass.remainingSeconds === 'number'
+        ? pass.remainingSeconds / 60
+        : (expiresAt - now) / 60_000,
+    ),
+  )
   const totalMinutes = Math.max(0, Math.round((expiresAt - issuedAt) / 60_000))
-  const status: LivePass['status'] = pass.status === 'EXPIRED'
+  const status: LivePass['status'] = ['EXPIRED', 'BLOCKED', 'CANCELLED', 'FAILED'].includes(pass.status)
     ? 'ended'
     : pass.status === 'ACTIVE'
       ? 'active'
