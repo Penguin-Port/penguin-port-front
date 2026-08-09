@@ -13,11 +13,13 @@ import type {
   CustomerCoupon,
   CustomerPass,
   CustomerPassStatus,
+  PrivacyNoticeResponse,
   RewardFulfillMode,
   RewardOption,
   UpsellHintResponse,
 } from '../../api/customer'
 import { ApiError } from '../../api/client'
+import { env } from '../../config/env'
 import '../../styles/customer.css'
 
 const screenParamSet = new Set<Screen>([
@@ -47,6 +49,17 @@ type PortalErrorInfo = {
   message: string
   requestId: string
   status?: number
+}
+
+const fallbackPrivacyNotice: PrivacyNoticeResponse = {
+  storeId: '',
+  storeName: '펭귄 카페 MVP',
+  phoneStorage: '이용권 연결에 필요한 전화번호만 암호화해 보관합니다.',
+  phoneRetentionDays: 30,
+  automaticDeletion: true,
+  purpose: 'Wi-Fi 이용권 연결, OTP 인증, 매장 보호를 위한 최소 정보 처리',
+  supportNote:
+    '불법 접속 대응 기록은 점주 보호 목적으로만 보관하며, 목적을 달성하면 폐기합니다. 마케팅에는 사용하지 않습니다.',
 }
 
 export function CustomerPortalPage() {
@@ -101,6 +114,8 @@ export function CustomerPortalPage() {
   const [couponError, setCouponError] = useState('')
   const [isCouponLoading, setIsCouponLoading] = useState(false)
   const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
+  const [privacyNotice, setPrivacyNotice] =
+    useState<PrivacyNoticeResponse>(fallbackPrivacyNotice)
 
   const goToScreen = (
     nextScreen: Screen,
@@ -328,6 +343,25 @@ export function CustomerPortalPage() {
       })
       .finally(() => {
         setIsCouponLoading(false)
+      })
+  }, [screen])
+
+  useEffect(() => {
+    if (screen !== 'privacy') return
+
+    const storeId = env.demoStoreId
+    if (!storeId) {
+      setPrivacyNotice(fallbackPrivacyNotice)
+      return
+    }
+
+    customerPortalService
+      .getPrivacyNotice({ storeId })
+      .then((response) => {
+        setPrivacyNotice(normalizePrivacyNotice(response))
+      })
+      .catch(() => {
+        setPrivacyNotice(fallbackPrivacyNotice)
       })
   }, [screen])
 
@@ -600,7 +634,12 @@ export function CustomerPortalPage() {
             onRetry={() => goToScreen('active')}
           />
         )}
-        {screen === 'privacy' && <PrivacyScreen onBack={() => goToScreen('active')} />}
+        {screen === 'privacy' && (
+          <PrivacyScreen
+            notice={privacyNotice}
+            onBack={() => goToScreen('active')}
+          />
+        )}
       </section>
     </main>
   )
@@ -1145,18 +1184,26 @@ function RequestInfoCard({ errorInfo }: { errorInfo: PortalErrorInfo }) {
   )
 }
 
-function PrivacyScreen({ onBack }: { onBack: () => void }) {
+function PrivacyScreen({
+  notice,
+  onBack,
+}: {
+  notice: PrivacyNoticeResponse
+  onBack: () => void
+}) {
   return (
     <PortalScreen eyebrow="/privacy">
       <h1>개인정보 · 보안 안내</h1>
       <div className="privacy-list">
         <PrivacyItem
           title="무엇을 보관하나요"
-          description="이용권 연결에 필요한 전화번호만 암호화해 보관합니다."
+          description={notice.phoneStorage}
         />
         <PrivacyItem
           title="언제 폐기하나요"
-          description="보관 기간 30일이 지나면 자동 폐기하고, 폐기 결과를 기록합니다."
+          description={`보관 기간 ${notice.phoneRetentionDays}일이 지나면 ${
+            notice.automaticDeletion ? '자동 폐기하고' : '폐기 대상에 포함하고'
+          }, 폐기 결과를 기록합니다.`}
         />
         <PrivacyItem
           title="수집하지 않는 것"
@@ -1164,12 +1211,11 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
         />
         <PrivacyItem
           title="왜 안내하나요"
-          description="불법 접속으로부터 매장을 보호하기 위한 최소한의 기록만 남깁니다."
+          description={notice.purpose}
         />
       </div>
       <p className="caption">
-        불법 접속 대응 기록은 점주 보호 목적으로만 보관하며, 목적을 달성하면
-        폐기합니다. 마케팅에는 사용하지 않습니다.
+        {notice.supportNote}
       </p>
       <button type="button" className="portal-button secondary" onClick={onBack}>
         이용권 화면으로
@@ -1412,6 +1458,35 @@ function toDisplayRewardOption(option: RewardOption): DisplayRewardOption {
     description: getRewardDescription(option),
     recommended: option.recommended,
   }
+}
+
+function normalizePrivacyNotice(
+  notice: PrivacyNoticeResponse,
+): PrivacyNoticeResponse {
+  return {
+    ...fallbackPrivacyNotice,
+    storeId: notice.storeId || fallbackPrivacyNotice.storeId,
+    storeName: getCleanText(notice.storeName, fallbackPrivacyNotice.storeName),
+    phoneStorage: getCleanText(notice.phoneStorage, fallbackPrivacyNotice.phoneStorage),
+    phoneRetentionDays:
+      typeof notice.phoneRetentionDays === 'number'
+        ? notice.phoneRetentionDays
+        : fallbackPrivacyNotice.phoneRetentionDays,
+    automaticDeletion:
+      typeof notice.automaticDeletion === 'boolean'
+        ? notice.automaticDeletion
+        : fallbackPrivacyNotice.automaticDeletion,
+    purpose: getCleanText(notice.purpose, fallbackPrivacyNotice.purpose),
+    supportNote: getCleanText(notice.supportNote, fallbackPrivacyNotice.supportNote),
+  }
+}
+
+function getCleanText(value: string, fallbackValue: string) {
+  return looksMojibake(value) ? fallbackValue : value
+}
+
+function looksMojibake(value: string) {
+  return /[ÃÂ�]|ì|ë|í|ê/.test(value)
 }
 
 function getRewardDescription(option: RewardOption) {

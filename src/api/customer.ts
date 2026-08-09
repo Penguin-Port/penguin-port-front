@@ -130,6 +130,16 @@ export interface CouponRedeemResponse {
   benefit: Record<string, unknown>
 }
 
+export interface PrivacyNoticeResponse {
+  storeId: string
+  storeName: string
+  phoneStorage: string
+  phoneRetentionDays: number
+  automaticDeletion: boolean
+  purpose: string
+  supportNote: string
+}
+
 function portalSessionHeaders(portalSession: string) {
   return { 'X-Portal-Session': portalSession }
 }
@@ -212,6 +222,12 @@ export const customerApi = {
         method: 'POST',
         headers: portalSessionHeaders(portalSession),
       },
+    )
+  },
+
+  getPrivacyNotice(storeId: string) {
+    return apiDataRequest<PrivacyNoticeResponse>(
+      `/public/stores/${storeId}/privacy-notice`,
     )
   },
 }

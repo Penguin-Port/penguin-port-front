@@ -6,6 +6,7 @@ import {
   type OrderClaimExchangeResponse,
   type OtpConfirmResponse,
   type OtpSendResponse,
+  type PrivacyNoticeResponse,
   type RewardChooseResponse,
   type RewardFulfillMode,
   type RewardOptionsResponse,
@@ -58,6 +59,9 @@ export type CustomerPortalService = {
     couponId: string
     portalSession: string
   }): Promise<CouponRedeemResponse>
+  getPrivacyNotice(input: {
+    storeId: string
+  }): Promise<PrivacyNoticeResponse>
 }
 
 const mockCustomerService: CustomerPortalService = {
@@ -155,6 +159,17 @@ const mockCustomerService: CustomerPortalService = {
       },
     })
   },
+  getPrivacyNotice({ storeId }) {
+    return Promise.resolve({
+      storeId,
+      storeName: '펭귄 카페 MVP',
+      phoneStorage: '이용권 연결에 필요한 전화번호만 암호화해 보관합니다.',
+      phoneRetentionDays: 30,
+      automaticDeletion: true,
+      purpose: 'Wi-Fi 이용권 연결, OTP 인증, 매장 보호를 위한 최소 정보 처리',
+      supportNote: '불법 접속 대응 기록은 점주 보호 목적으로만 보관하며, 목적을 달성하면 폐기합니다.',
+    })
+  },
 }
 
 const apiCustomerService: CustomerPortalService = {
@@ -187,6 +202,9 @@ const apiCustomerService: CustomerPortalService = {
   },
   redeemCoupon({ couponId, portalSession }) {
     return customerApi.redeemCoupon(couponId, portalSession)
+  },
+  getPrivacyNotice({ storeId }) {
+    return customerApi.getPrivacyNotice(storeId)
   },
 }
 
