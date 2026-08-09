@@ -20,11 +20,13 @@ import {
   AdminWifiPoliciesPage,
 } from './routes/admin'
 import { CustomerPortalPage } from './routes/customer/CustomerPortalPage'
+import { DemoPosPage } from './routes/customer/DemoPosPage'
 
 function App() {
   return (
     <Routes>
       <Route path="/app/customer" element={<CustomerPortalPage />} />
+      <Route path="/app/demo-pos" element={<DemoPosPage />} />
       <Route path="/connect" element={<CustomerPortalPage />} />
       <Route element={<AdminLayout />}>
         <Route path={ADMIN_ROUTES.dashboard} element={<AdminDashboardPage />} />

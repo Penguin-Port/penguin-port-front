@@ -1,15 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createMockPortalOrder,
   portalDemo,
   recommendedItems,
-  rewardOptions,
+  rewardOptions as fallbackRewardOptions,
 } from './customerMock'
 import { customerPortalService } from './customerService'
 import type { PortalOrder, Screen } from './customerTypes'
-import type { CustomerPass, CustomerPassStatus } from '../../api/customer'
+import type {
+  CustomerPass,
+  CustomerPassStatus,
+  RewardFulfillMode,
+  RewardOption,
+  UpsellHintResponse,
+} from '../../api/customer'
 import '../../styles/customer.css'
 
 const screenParamSet = new Set<Screen>([
@@ -26,6 +32,13 @@ const screenParamSet = new Set<Screen>([
   'privacy',
   'claimMissing',
 ])
+
+type DisplayRewardOption = {
+  benefitId: string
+  title: string
+  description: string
+  recommended: boolean
+}
 
 export function CustomerPortalPage() {
   const location = useLocation()
@@ -66,6 +79,15 @@ export function CustomerPortalPage() {
   const [hasPassConsent, setHasPassConsent] = useState(false)
   const [hasPrivacyConsent, setHasPrivacyConsent] = useState(false)
   const [selectedRewardId, setSelectedRewardId] = useState('')
+  const [rewardGrantIds, setRewardGrantIds] = useState<string[]>(() =>
+    readStoredRewardGrantIds(),
+  )
+  const [upsellHint, setUpsellHint] = useState<UpsellHintResponse | null>(null)
+  const [availableRewardOptions, setAvailableRewardOptions] = useState<
+    DisplayRewardOption[]
+  >([])
+  const [rewardError, setRewardError] = useState('')
+  const [couponCount, setCouponCount] = useState(0)
 
   const goToScreen = (
     nextScreen: Screen,
@@ -168,6 +190,96 @@ export function CustomerPortalPage() {
     return () => window.clearInterval(timer)
   }, [screen])
 
+  useEffect(() => {
+    if (screen !== 'active' || !passId) return
+
+    let isCanceled = false
+
+    const refreshPass = async () => {
+      const savedSession = window.sessionStorage.getItem('portalSession')
+      if (!savedSession) return
+
+      try {
+        const response = await customerPortalService.getPass({
+          passId,
+          portalSession: savedSession,
+        })
+        if (isCanceled) return
+
+        setActivePass(response)
+        setSecondsLeft(response.remainingSeconds)
+
+        if (response.status === 'EXPIRED' || response.remainingSeconds <= 0) {
+          goToScreen('expired', { replace: true, clearOrderClaim: true })
+        } else if (response.status === 'BLOCKED') {
+          goToScreen('blocked', { replace: true, clearOrderClaim: true })
+        } else if (response.status === 'FAILED') {
+          goToScreen('error', { replace: true, clearOrderClaim: true })
+        }
+      } catch {
+        if (!isCanceled) {
+          goToScreen('error', { replace: true, clearOrderClaim: true })
+        }
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshPass()
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshPass()
+    }, 30000)
+
+    window.addEventListener('focus', refreshPass)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isCanceled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshPass)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [passId, screen])
+
+  useEffect(() => {
+    if (screen !== 'active') return
+
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    if (!savedSession) return
+
+    customerPortalService
+      .getUpsellHint({ portalSession: savedSession })
+      .then(setUpsellHint)
+      .catch(() => {
+        setUpsellHint(null)
+      })
+  }, [screen, activePass?.version])
+
+  useEffect(() => {
+    if (screen !== 'reward') return
+
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    const grantId = rewardGrantIds[0]
+    if (!savedSession || !grantId) {
+      setAvailableRewardOptions([])
+      return
+    }
+
+    customerPortalService
+      .getRewardOptions({ grantId, portalSession: savedSession })
+      .then((response) => {
+        setAvailableRewardOptions(response.options.map(toDisplayRewardOption))
+        setRewardError('')
+      })
+      .catch((error) => {
+        setRewardError(getErrorMessage(error))
+        setAvailableRewardOptions([])
+      })
+  }, [rewardGrantIds, screen])
+
   const canSendOtp =
     guestPhone.length === 11 && cooldownSeconds === 0 && !isOtpSubmitting
   const canConfirmOtp = otpCode.length === 6 && !isOtpSubmitting
@@ -242,6 +354,39 @@ export function CustomerPortalPage() {
     goToScreen('active')
   }
 
+  const handleChooseReward = async (fulfillMode: RewardFulfillMode) => {
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    const grantId = rewardGrantIds[0]
+    if (!savedSession || !grantId || !selectedRewardId) return
+
+    try {
+      const response = await customerPortalService.chooseReward({
+        grantId,
+        benefitId: selectedRewardId,
+        fulfillMode,
+        portalSession: savedSession,
+      })
+
+      setRewardGrantIds((current) => current.filter((id) => id !== grantId))
+      window.sessionStorage.setItem(
+        'portalRewardGrantIds',
+        JSON.stringify(rewardGrantIds.filter((id) => id !== grantId)),
+      )
+      setSelectedRewardId('')
+      setRewardError('')
+
+      if (response.coupon) {
+        setCouponCount((count) => count + 1)
+        goToScreen('coupons')
+        return
+      }
+
+      goToScreen('active')
+    } catch (error) {
+      setRewardError(getErrorMessage(error))
+    }
+  }
+
   return (
     <main className="customer-portal">
       <section className="portal-phone" aria-label="팽귄포트 고객 포털">
@@ -299,6 +444,9 @@ export function CustomerPortalPage() {
         {screen === 'active' && (
           <ActiveScreen
             pass={activePass}
+            upsellHint={upsellHint}
+            rewardCount={rewardGrantIds.length}
+            couponCount={couponCount}
             currentTime={now}
             secondsLeft={secondsLeft}
             onReward={() => goToScreen('reward')}
@@ -309,12 +457,18 @@ export function CustomerPortalPage() {
         )}
         {screen === 'reward' && (
           <RewardScreen
+            rewardOptions={
+              availableRewardOptions.length > 0
+                ? availableRewardOptions
+                : fallbackRewardOptions
+            }
             selectedRewardId={selectedRewardId}
             onSelectReward={setSelectedRewardId}
-            onCoupons={() => goToScreen('coupons')}
+            onChooseReward={handleChooseReward}
+            errorMessage={rewardError}
           />
         )}
-        {screen === 'coupons' && <CouponsScreen />}
+        {screen === 'coupons' && <CouponsScreen couponCount={couponCount} />}
         {screen === 'extend' && <ExtendScreen />}
         {screen === 'expired' && (
           <ExpiredScreen
@@ -543,6 +697,9 @@ function StartScreen({
 
 function ActiveScreen({
   pass,
+  upsellHint,
+  rewardCount,
+  couponCount,
   currentTime,
   secondsLeft,
   onReward,
@@ -551,6 +708,9 @@ function ActiveScreen({
   onPrivacy,
 }: {
   pass: CustomerPass | null
+  upsellHint: UpsellHintResponse | null
+  rewardCount: number
+  couponCount: number
   currentTime: Date
   secondsLeft: number
   onReward: () => void
@@ -559,6 +719,16 @@ function ActiveScreen({
   onPrivacy: () => void
 }) {
   const status = getEffectivePassStatus(pass?.status ?? 'ACTIVE', secondsLeft)
+  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? portalDemo.dailyTotal
+  const nextTierAmount = upsellHint?.nextTierAmount ?? portalDemo.nextTierAmount
+  const remainingAmount =
+    upsellHint?.remainingAmountToNextTier ?? Math.max(0, nextTierAmount - dailyTotal)
+  const progressPercent = nextTierAmount
+    ? Math.min(100, Math.round((dailyTotal / nextTierAmount) * 100))
+    : 100
+  const benefitsPreview =
+    upsellHint?.nextTierBenefitsPreview?.join(' · ') ??
+    'Wi-Fi 종일권 · 음료 할인 · 신메뉴 시식권'
   const endTimeLabel = useMemo(
     () => formatShortTime(pass ? new Date(pass.expiresAt) : currentTime),
     [currentTime, pass],
@@ -576,25 +746,23 @@ function ActiveScreen({
       <section className="progress-card">
         <div className="amount-line">
           <span>오늘 누적 구매액</span>
-          <strong>{formatWon(portalDemo.dailyTotal)}</strong>
+          <strong>{formatWon(dailyTotal)}</strong>
         </div>
         <div className="progress-bar">
-          <span style={{ width: '50%' }} />
+          <span style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="split-line">
-          <span>다음 티어 {formatWon(portalDemo.nextTierAmount)}</span>
-          <strong>{formatWon(portalDemo.nextTierAmount - portalDemo.dailyTotal)} 남음</strong>
+          <span>다음 티어 {formatWon(nextTierAmount)}</span>
+          <strong>{formatWon(remainingAmount)} 남음</strong>
         </div>
-        <p>
-          Wi-Fi 종일권 · 음료 할인 · 신메뉴 시식권 중에서 고를 수 있습니다.
-        </p>
+        <p>{benefitsPreview} 중에서 고를 수 있습니다.</p>
       </section>
       <button type="button" className="portal-button primary" onClick={onReward}>
-        혜택 선택하기
+        {rewardCount > 0 ? '혜택 선택하기' : '혜택 확인하기'}
       </button>
       <div className="mini-actions">
         <button type="button" onClick={onCoupons}>
-          쿠폰함 1장
+          쿠폰함 {couponCount}장
         </button>
         <button type="button" onClick={onExtend}>
           시간 늘리는 방법
@@ -622,13 +790,17 @@ function ActiveScreen({
 }
 
 function RewardScreen({
+  rewardOptions,
   selectedRewardId,
   onSelectReward,
-  onCoupons,
+  onChooseReward,
+  errorMessage,
 }: {
+  rewardOptions: DisplayRewardOption[]
   selectedRewardId: string
   onSelectReward: (benefitId: string) => void
-  onCoupons: () => void
+  onChooseReward: (fulfillMode: RewardFulfillMode) => void
+  errorMessage: string
 }) {
   return (
     <PortalScreen eyebrow="REWARD UNLOCKED" accentEyebrow>
@@ -662,6 +834,7 @@ function RewardScreen({
           type="button"
           className="portal-button primary"
           disabled={!selectedRewardId}
+          onClick={() => onChooseReward('IMMEDIATE')}
         >
           지금 바로 사용
         </button>
@@ -669,20 +842,21 @@ function RewardScreen({
           type="button"
           className="portal-button secondary"
           disabled={!selectedRewardId}
-          onClick={onCoupons}
+          onClick={() => onChooseReward('COUPON_7D')}
         >
           쿠폰으로 저장 (7일)
         </button>
+        {errorMessage && <span className="form-error">{errorMessage}</span>}
         <span>최종 적용 결과는 결제 응답 기준으로 확정됩니다.</span>
       </div>
     </PortalScreen>
   )
 }
 
-function CouponsScreen() {
+function CouponsScreen({ couponCount }: { couponCount: number }) {
   return (
     <PortalScreen eyebrow="COUPONS">
-      <h1>쿠폰함 1장</h1>
+      <h1>쿠폰함 {couponCount}장</h1>
       <p className="screen-copy">저장한 쿠폰은 7일 이내에 사용할 수 있습니다.</p>
       <section className="coupon-card">
         <span>
@@ -966,6 +1140,42 @@ function getErrorMessage(error: unknown) {
     : '요청 처리 중 문제가 발생했습니다.'
 }
 
+function readStoredRewardGrantIds() {
+  const rawValue = window.sessionStorage.getItem('portalRewardGrantIds')
+  if (!rawValue) return []
+
+  try {
+    const parsedValue = JSON.parse(rawValue)
+
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter((item): item is string => typeof item === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function toDisplayRewardOption(option: RewardOption): DisplayRewardOption {
+  return {
+    benefitId: option.benefitId,
+    title: option.title,
+    description: getRewardDescription(option),
+    recommended: option.recommended,
+  }
+}
+
+function getRewardDescription(option: RewardOption) {
+  const descriptions: Record<string, string> = {
+    FREE_SIZE_UP: '라떼를 자주 주문하셨습니다',
+    FREE_SHOT: '오늘 두 잔 이상 주문하셨습니다',
+    DESSERT_DISCOUNT: '디저트를 자주 주문하셨습니다',
+    WIFI_DAY_PASS: '오늘 하루 Wi-Fi를 계속 이용할 수 있습니다',
+    DRINK_DISCOUNT: '음료 할인 혜택을 받을 수 있습니다',
+  }
+
+  return descriptions[option.type] ?? '선택 가능한 리워드 혜택입니다'
+}
+
 function getEffectivePassStatus(
   status: CustomerPassStatus,
   secondsLeft: number,
@@ -1025,3 +1235,4 @@ function formatShortTime(date: Date) {
 function normalizeDigits(value: string) {
   return value.replace(/\D/g, '')
 }
+
