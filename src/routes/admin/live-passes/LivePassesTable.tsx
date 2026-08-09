@@ -6,6 +6,7 @@ interface LivePassesTableProps {
   isApiConnected: boolean
   pendingPassId: string | null
   onExtend: (passId: string) => void
+  onBlock: (passId: string) => void
   onExpire: (passId: string) => void
 }
 
@@ -14,6 +15,7 @@ export function LivePassesTable({
   isApiConnected,
   pendingPassId,
   onExtend,
+  onBlock,
   onExpire,
 }: LivePassesTableProps) {
   return (
@@ -33,16 +35,17 @@ export function LivePassesTable({
         <tbody>
           {passes.map((pass) => (
             <tr key={pass.id}>
-              <td title={pass.id}>{pass.id.length > 12 ? `${pass.id.slice(0, 8)}…` : pass.id}</td>
-              <td>{pass.phone}</td>
-              <td className="remaining-time">{pass.remaining}</td>
-              <td>{pass.totalProvided}</td>
-              <td>{pass.source}</td>
-              <td><span className={`live-pass-status ${pass.status}`}>{LIVE_PASS_STATUS_LABELS[pass.status]}</span></td>
+              <td data-label="이용권" title={pass.id}>{pass.id.length > 12 ? `${pass.id.slice(0, 8)}…` : pass.id}</td>
+              <td data-label="연락처">{pass.phone}</td>
+              <td data-label="잔여" className="remaining-time">{pass.remaining}</td>
+              <td data-label="총 제공">{pass.totalProvided}</td>
+              <td data-label="발급 근거">{pass.source}</td>
+              <td data-label="상태"><span className={`live-pass-status ${pass.status}`}>{LIVE_PASS_STATUS_LABELS[pass.status]}</span></td>
               {isApiConnected && (
-                <td>
+                <td data-label="관리">
                   <div className="pass-actions">
                     <button disabled={pendingPassId === pass.id} onClick={() => onExtend(pass.id)}>+15분</button>
+                    <button className="danger" disabled={pendingPassId === pass.id} onClick={() => onBlock(pass.id)}>차단</button>
                     <button className="danger" disabled={pendingPassId === pass.id} onClick={() => onExpire(pass.id)}>종료</button>
                   </div>
                 </td>

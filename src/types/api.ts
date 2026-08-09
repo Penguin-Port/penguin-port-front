@@ -12,11 +12,19 @@ export interface AdminLoginResponse {
   adminId: string
   storeId: string
   username: string
+  role: 'OWNER' | 'MANAGER' | 'STAFF' | 'VIEWER'
   accessToken: string
   accessExpiresIn: number
 }
 
-export type ApiPassStatus = 'ISSUED' | 'ACTIVE' | 'EXPIRING_SOON' | 'EXPIRED'
+export type ApiPassStatus =
+  | 'ISSUED'
+  | 'ACTIVE'
+  | 'EXPIRING_SOON'
+  | 'EXPIRED'
+  | 'BLOCKED'
+  | 'CANCELLED'
+  | 'FAILED'
 
 export interface AdminPassResponse {
   passId: string
@@ -24,6 +32,7 @@ export interface AdminPassResponse {
   issuedAt: string
   activatedAt: string | null
   expiresAt: string
+  remainingSeconds?: number
   version: number
   policySnapshot: Record<string, unknown>
   phone?: string

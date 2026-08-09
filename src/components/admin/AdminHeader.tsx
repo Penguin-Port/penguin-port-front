@@ -6,10 +6,11 @@ import { AdminIcon } from './AdminIcon'
 import { useToast } from './useToast'
 
 interface AdminHeaderProps {
+  isMenuOpen: boolean
   onMenuToggle: () => void
 }
 
-export function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
+export function AdminHeader({ isMenuOpen, onMenuToggle }: AdminHeaderProps) {
   const { showToast } = useToast()
   const location = useLocation()
   const [isProfileOpen, setIsProfileOpen] = useState(false)
@@ -41,7 +42,12 @@ export function AdminHeader({ onMenuToggle }: AdminHeaderProps) {
 
   return (
     <header className="topbar">
-      <button className="mobile-menu" onClick={onMenuToggle} aria-label="메뉴 열기">
+      <button
+        className={`mobile-menu ${isMenuOpen ? 'is-open' : ''}`}
+        onClick={onMenuToggle}
+        aria-label={isMenuOpen ? '사이드바 닫기' : '사이드바 열기'}
+        aria-expanded={isMenuOpen}
+      >
         <span /><span /><span />
       </button>
       <Link className="brand" to={ADMIN_ROUTES.dashboard} aria-label="PenguinPort 관리자 홈">
