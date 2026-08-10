@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useCallback } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createMockPortalOrder,
@@ -117,27 +118,30 @@ export function CustomerPortalPage() {
   const [privacyNotice, setPrivacyNotice] =
     useState<PrivacyNoticeResponse>(fallbackPrivacyNotice)
 
-  const goToScreen = (
-    nextScreen: Screen,
-    options?: { replace?: boolean; clearOrderClaim?: boolean },
-  ) => {
-    setScreen(nextScreen)
-    if (nextScreen !== 'blocked' && nextScreen !== 'error') {
-      setLastPortalError(null)
-    }
+  const goToScreen = useCallback(
+    (
+      nextScreen: Screen,
+      options?: { replace?: boolean; clearOrderClaim?: boolean },
+    ) => {
+      setScreen(nextScreen)
+      if (nextScreen !== 'blocked' && nextScreen !== 'error') {
+        setLastPortalError(null)
+      }
 
-    if (!isConnectRoute) return
+      if (!isConnectRoute) return
 
-    const nextParams = new URLSearchParams()
-    if (orderClaim && !options?.clearOrderClaim) {
-      nextParams.set('orderClaim', orderClaim)
-    }
-    nextParams.set('screen', nextScreen)
+      const nextParams = new URLSearchParams()
+      if (orderClaim && !options?.clearOrderClaim) {
+        nextParams.set('orderClaim', orderClaim)
+      }
+      nextParams.set('screen', nextScreen)
 
-    navigate(`${location.pathname}?${nextParams.toString()}`, {
-      replace: options?.replace ?? false,
-    })
-  }
+      navigate(`${location.pathname}?${nextParams.toString()}`, {
+        replace: options?.replace ?? false,
+      })
+    },
+    [isConnectRoute, location.pathname, navigate, orderClaim],
+  )
 
   useEffect(() => {
     if (!isConnectRoute) return
@@ -211,7 +215,7 @@ export function CustomerPortalPage() {
     return () => {
       isCanceled = true
     }
-  }, [isConnectRoute, orderClaim])
+  }, [goToScreen, isConnectRoute, orderClaim])
 
   useEffect(() => {
     if (cooldownSeconds === 0) return
@@ -286,7 +290,7 @@ export function CustomerPortalPage() {
       window.removeEventListener('focus', refreshPass)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [passId, screen])
+  }, [goToScreen, passId, screen])
 
   useEffect(() => {
     if (screen !== 'active') return
