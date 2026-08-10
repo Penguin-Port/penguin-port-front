@@ -1,15 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useCallback } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createMockPortalOrder,
   portalDemo,
   recommendedItems,
-  rewardOptions,
+  rewardOptions as fallbackRewardOptions,
 } from './customerMock'
 import { customerPortalService } from './customerService'
 import type { PortalOrder, Screen } from './customerTypes'
-import type { CustomerPass, CustomerPassStatus } from '../../api/customer'
+import type {
+  CustomerCoupon,
+  CustomerPass,
+  CustomerPassStatus,
+  PrivacyNoticeResponse,
+  RewardFulfillMode,
+  RewardOption,
+  UpsellHintResponse,
+} from '../../api/customer'
+import { ApiError } from '../../api/client'
+import { env } from '../../config/env'
 import '../../styles/customer.css'
 
 const screenParamSet = new Set<Screen>([
@@ -26,6 +37,31 @@ const screenParamSet = new Set<Screen>([
   'privacy',
   'claimMissing',
 ])
+
+type DisplayRewardOption = {
+  benefitId: string
+  title: string
+  description: string
+  recommended: boolean
+}
+
+type PortalErrorInfo = {
+  title: string
+  message: string
+  requestId: string
+  status?: number
+}
+
+const fallbackPrivacyNotice: PrivacyNoticeResponse = {
+  storeId: '',
+  storeName: '펭귄 카페 MVP',
+  phoneStorage: '이용권 연결에 필요한 전화번호만 암호화해 보관합니다.',
+  phoneRetentionDays: 30,
+  automaticDeletion: true,
+  purpose: 'Wi-Fi 이용권 연결, OTP 인증, 매장 보호를 위한 최소 정보 처리',
+  supportNote:
+    '불법 접속 대응 기록은 점주 보호 목적으로만 보관하며, 목적을 달성하면 폐기합니다. 마케팅에는 사용하지 않습니다.',
+}
 
 export function CustomerPortalPage() {
   const location = useLocation()
@@ -66,25 +102,46 @@ export function CustomerPortalPage() {
   const [hasPassConsent, setHasPassConsent] = useState(false)
   const [hasPrivacyConsent, setHasPrivacyConsent] = useState(false)
   const [selectedRewardId, setSelectedRewardId] = useState('')
+  const [rewardGrantIds, setRewardGrantIds] = useState<string[]>(() =>
+    readStoredRewardGrantIds(),
+  )
+  const [upsellHint, setUpsellHint] = useState<UpsellHintResponse | null>(null)
+  const [availableRewardOptions, setAvailableRewardOptions] = useState<
+    DisplayRewardOption[]
+  >([])
+  const [rewardError, setRewardError] = useState('')
+  const [couponCount, setCouponCount] = useState(0)
+  const [coupons, setCoupons] = useState<CustomerCoupon[]>([])
+  const [couponError, setCouponError] = useState('')
+  const [isCouponLoading, setIsCouponLoading] = useState(false)
+  const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
+  const [privacyNotice, setPrivacyNotice] =
+    useState<PrivacyNoticeResponse>(fallbackPrivacyNotice)
 
-  const goToScreen = (
-    nextScreen: Screen,
-    options?: { replace?: boolean; clearOrderClaim?: boolean },
-  ) => {
-    setScreen(nextScreen)
+  const goToScreen = useCallback(
+    (
+      nextScreen: Screen,
+      options?: { replace?: boolean; clearOrderClaim?: boolean },
+    ) => {
+      setScreen(nextScreen)
+      if (nextScreen !== 'blocked' && nextScreen !== 'error') {
+        setLastPortalError(null)
+      }
 
-    if (!isConnectRoute) return
+      if (!isConnectRoute) return
 
-    const nextParams = new URLSearchParams()
-    if (orderClaim && !options?.clearOrderClaim) {
-      nextParams.set('orderClaim', orderClaim)
-    }
-    nextParams.set('screen', nextScreen)
+      const nextParams = new URLSearchParams()
+      if (orderClaim && !options?.clearOrderClaim) {
+        nextParams.set('orderClaim', orderClaim)
+      }
+      nextParams.set('screen', nextScreen)
 
-    navigate(`${location.pathname}?${nextParams.toString()}`, {
-      replace: options?.replace ?? false,
-    })
-  }
+      navigate(`${location.pathname}?${nextParams.toString()}`, {
+        replace: options?.replace ?? false,
+      })
+    },
+    [isConnectRoute, location.pathname, navigate, orderClaim],
+  )
 
   useEffect(() => {
     if (!isConnectRoute) return
@@ -126,26 +183,39 @@ export function CustomerPortalPage() {
 
     let isCanceled = false
 
-    customerPortalService.exchangeOrderClaim(claimForDemo).then((response) => {
-      if (isCanceled) return
+    customerPortalService
+      .exchangeOrderClaim(claimForDemo)
+      .then((response) => {
+        if (isCanceled) return
 
-      setPortalOrder({
-        orderClaim: claimForDemo,
-        storeName: response.storeName,
-        orderNo: response.orderNo,
-        items: response.items,
-        paidAmount: response.paidAmount,
-        providedMinutes: response.providedMinutes,
+        setPortalOrder({
+          orderClaim: claimForDemo,
+          storeName: response.storeName,
+          orderNo: response.orderNo,
+          items: response.items,
+          paidAmount: response.paidAmount,
+          providedMinutes: response.providedMinutes,
+        })
+        setVerificationTicket(response.verificationTicket)
+        setPassId(response.passId ?? '')
+        setSecondsLeft(response.providedMinutes * 60)
       })
-      setVerificationTicket(response.verificationTicket)
-      setPassId(response.passId ?? '')
-      setSecondsLeft(response.providedMinutes * 60)
-    })
+      .catch((error) => {
+        if (isCanceled) return
+        setLastPortalError(toPortalErrorInfo(error, 'CLAIM_EXCHANGE'))
+
+        if (isRecoverableClaimError(error)) {
+          goToScreen('blocked', { replace: true, clearOrderClaim: true })
+          return
+        }
+
+        goToScreen('error', { replace: true, clearOrderClaim: true })
+      })
 
     return () => {
       isCanceled = true
     }
-  }, [isConnectRoute, orderClaim])
+  }, [goToScreen, isConnectRoute, orderClaim])
 
   useEffect(() => {
     if (cooldownSeconds === 0) return
@@ -166,6 +236,137 @@ export function CustomerPortalPage() {
     }, 1000)
 
     return () => window.clearInterval(timer)
+  }, [screen])
+
+  useEffect(() => {
+    if (screen !== 'active' || !passId) return
+
+    let isCanceled = false
+
+    const refreshPass = async () => {
+      const savedSession = window.sessionStorage.getItem('portalSession')
+      if (!savedSession) return
+
+      try {
+        const response = await customerPortalService.getPass({
+          passId,
+          portalSession: savedSession,
+        })
+        if (isCanceled) return
+
+        setActivePass(response)
+        setSecondsLeft(response.remainingSeconds)
+
+        if (response.status === 'EXPIRED' || response.remainingSeconds <= 0) {
+          goToScreen('expired', { replace: true, clearOrderClaim: true })
+        } else if (response.status === 'BLOCKED') {
+          goToScreen('blocked', { replace: true, clearOrderClaim: true })
+        } else if (response.status === 'FAILED') {
+          goToScreen('error', { replace: true, clearOrderClaim: true })
+        }
+      } catch {
+        if (!isCanceled) {
+          goToScreen('error', { replace: true, clearOrderClaim: true })
+        }
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshPass()
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshPass()
+    }, 30000)
+
+    window.addEventListener('focus', refreshPass)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isCanceled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshPass)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [goToScreen, passId, screen])
+
+  useEffect(() => {
+    if (screen !== 'active') return
+
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    if (!savedSession) return
+
+    customerPortalService
+      .getUpsellHint({ portalSession: savedSession })
+      .then(setUpsellHint)
+      .catch(() => {
+        setUpsellHint(null)
+      })
+  }, [screen, activePass?.version])
+
+  useEffect(() => {
+    if (screen !== 'reward') return
+
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    const grantId = rewardGrantIds[0]
+    if (!savedSession || !grantId) {
+      setAvailableRewardOptions([])
+      return
+    }
+
+    customerPortalService
+      .getRewardOptions({ grantId, portalSession: savedSession })
+      .then((response) => {
+        setAvailableRewardOptions(response.options.map(toDisplayRewardOption))
+        setRewardError('')
+      })
+      .catch((error) => {
+        setRewardError(getErrorMessage(error))
+        setAvailableRewardOptions([])
+      })
+  }, [rewardGrantIds, screen])
+
+  useEffect(() => {
+    if (screen !== 'coupons') return
+
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    if (!savedSession) return
+
+    setIsCouponLoading(true)
+    customerPortalService
+      .listCoupons({ portalSession: savedSession })
+      .then((response) => {
+        setCoupons(response)
+        setCouponCount(response.filter((coupon) => coupon.status === 'AVAILABLE').length)
+        setCouponError('')
+      })
+      .catch((error) => {
+        setCouponError(getErrorMessage(error))
+      })
+      .finally(() => {
+        setIsCouponLoading(false)
+      })
+  }, [screen])
+
+  useEffect(() => {
+    if (screen !== 'privacy') return
+
+    const storeId = env.demoStoreId
+    if (!storeId) {
+      setPrivacyNotice(fallbackPrivacyNotice)
+      return
+    }
+
+    customerPortalService
+      .getPrivacyNotice({ storeId })
+      .then((response) => {
+        setPrivacyNotice(normalizePrivacyNotice(response))
+      })
+      .catch(() => {
+        setPrivacyNotice(fallbackPrivacyNotice)
+      })
   }, [screen])
 
   const canSendOtp =
@@ -217,6 +418,7 @@ export function CustomerPortalPage() {
       setPassId(response.passId ?? '')
       setOtpVerified(true)
       window.sessionStorage.setItem('portalSession', response.portalSession)
+      window.sessionStorage.setItem('portalPhone', guestPhone)
       if (response.passId) {
         window.sessionStorage.setItem('portalPassId', response.passId)
       }
@@ -231,15 +433,97 @@ export function CustomerPortalPage() {
   const handleActivatePass = async () => {
     if (!canStartWifi || !passId) return
 
-    const savedSession = window.sessionStorage.getItem('portalSession') ?? ''
-    const response = await customerPortalService.activatePass({
-      passId,
-      portalSession: savedSession,
-    })
+    try {
+      const savedSession = window.sessionStorage.getItem('portalSession') ?? ''
+      const response = await customerPortalService.activatePass({
+        passId,
+        portalSession: savedSession,
+      })
 
-    setActivePass(response)
-    setSecondsLeft(response.remainingSeconds)
-    goToScreen('active')
+      setActivePass(response)
+      setSecondsLeft(response.remainingSeconds)
+      goToScreen('active')
+    } catch (error) {
+      setLastPortalError(toPortalErrorInfo(error, 'PASS_ACTIVATE'))
+      if (isBlockedPassError(error)) {
+        goToScreen('blocked', { replace: true, clearOrderClaim: true })
+        return
+      }
+
+      goToScreen('error', { replace: true, clearOrderClaim: true })
+    }
+  }
+
+  const handleChooseReward = async (fulfillMode: RewardFulfillMode) => {
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    const grantId = rewardGrantIds[0]
+    if (!savedSession || !grantId || !selectedRewardId) return
+
+    try {
+      const response = await customerPortalService.chooseReward({
+        grantId,
+        benefitId: selectedRewardId,
+        fulfillMode,
+        portalSession: savedSession,
+      })
+
+      setRewardGrantIds((current) => current.filter((id) => id !== grantId))
+      window.sessionStorage.setItem(
+        'portalRewardGrantIds',
+        JSON.stringify(rewardGrantIds.filter((id) => id !== grantId)),
+      )
+      setSelectedRewardId('')
+      setRewardError('')
+
+      if (response.coupon) {
+        const savedCoupon = response.coupon
+        setCoupons((current) => [
+          {
+            couponId: savedCoupon.couponId,
+            status: savedCoupon.status,
+            benefit: response.benefit,
+            expiresAt: savedCoupon.expiresAt,
+            redeemedAt: null,
+          },
+          ...current,
+        ])
+        setCouponCount((count) => count + 1)
+        goToScreen('coupons')
+        return
+      }
+
+      goToScreen('active')
+    } catch (error) {
+      setRewardError(getErrorMessage(error))
+    }
+  }
+
+  const handleRedeemCoupon = async (couponId: string) => {
+    const savedSession = window.sessionStorage.getItem('portalSession')
+    if (!savedSession) return
+
+    try {
+      const response = await customerPortalService.redeemCoupon({
+        couponId,
+        portalSession: savedSession,
+      })
+
+      setCoupons((current) =>
+        current.map((coupon) =>
+          coupon.couponId === couponId
+            ? {
+                ...coupon,
+                status: response.status,
+                redeemedAt: response.redeemedAt,
+              }
+            : coupon,
+        ),
+      )
+      setCouponCount((count) => Math.max(0, count - 1))
+      setCouponError('')
+    } catch (error) {
+      setCouponError(getErrorMessage(error))
+    }
   }
 
   return (
@@ -299,6 +583,9 @@ export function CustomerPortalPage() {
         {screen === 'active' && (
           <ActiveScreen
             pass={activePass}
+            upsellHint={upsellHint}
+            rewardCount={rewardGrantIds.length}
+            couponCount={couponCount}
             currentTime={now}
             secondsLeft={secondsLeft}
             onReward={() => goToScreen('reward')}
@@ -309,13 +596,29 @@ export function CustomerPortalPage() {
         )}
         {screen === 'reward' && (
           <RewardScreen
+            rewardOptions={
+              availableRewardOptions.length > 0
+                ? availableRewardOptions
+                : fallbackRewardOptions
+            }
             selectedRewardId={selectedRewardId}
             onSelectReward={setSelectedRewardId}
-            onCoupons={() => goToScreen('coupons')}
+            onChooseReward={handleChooseReward}
+            errorMessage={rewardError}
           />
         )}
-        {screen === 'coupons' && <CouponsScreen />}
-        {screen === 'extend' && <ExtendScreen />}
+        {screen === 'coupons' && (
+          <CouponsScreen
+            coupons={coupons}
+            couponCount={couponCount}
+            errorMessage={couponError}
+            isLoading={isCouponLoading}
+            onRedeemCoupon={handleRedeemCoupon}
+          />
+        )}
+        {screen === 'extend' && (
+          <ExtendScreen onAdditionalOrder={() => navigate('/app/demo-pos?mode=extend')} />
+        )}
         {screen === 'expired' && (
           <ExpiredScreen
             onExtend={() => goToScreen('extend')}
@@ -324,12 +627,23 @@ export function CustomerPortalPage() {
         )}
         {screen === 'blocked' && (
           <BlockedScreen
+            errorInfo={lastPortalError}
             onReconnect={() => goToScreen(orderClaim ? 'qr' : 'claimMissing')}
             onPrivacy={() => goToScreen('privacy')}
           />
         )}
-        {screen === 'error' && <ErrorScreen onRetry={() => goToScreen('active')} />}
-        {screen === 'privacy' && <PrivacyScreen onBack={() => goToScreen('active')} />}
+        {screen === 'error' && (
+          <ErrorScreen
+            errorInfo={lastPortalError}
+            onRetry={() => goToScreen('active')}
+          />
+        )}
+        {screen === 'privacy' && (
+          <PrivacyScreen
+            notice={privacyNotice}
+            onBack={() => goToScreen('active')}
+          />
+        )}
       </section>
     </main>
   )
@@ -543,6 +857,9 @@ function StartScreen({
 
 function ActiveScreen({
   pass,
+  upsellHint,
+  rewardCount,
+  couponCount,
   currentTime,
   secondsLeft,
   onReward,
@@ -551,6 +868,9 @@ function ActiveScreen({
   onPrivacy,
 }: {
   pass: CustomerPass | null
+  upsellHint: UpsellHintResponse | null
+  rewardCount: number
+  couponCount: number
   currentTime: Date
   secondsLeft: number
   onReward: () => void
@@ -559,6 +879,16 @@ function ActiveScreen({
   onPrivacy: () => void
 }) {
   const status = getEffectivePassStatus(pass?.status ?? 'ACTIVE', secondsLeft)
+  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? portalDemo.dailyTotal
+  const nextTierAmount = upsellHint?.nextTierAmount ?? portalDemo.nextTierAmount
+  const remainingAmount =
+    upsellHint?.remainingAmountToNextTier ?? Math.max(0, nextTierAmount - dailyTotal)
+  const progressPercent = nextTierAmount
+    ? Math.min(100, Math.round((dailyTotal / nextTierAmount) * 100))
+    : 100
+  const benefitsPreview =
+    upsellHint?.nextTierBenefitsPreview?.map(formatBenefitLabel).join(' · ') ??
+    'Wi-Fi 종일권 · 음료 할인 · 신메뉴 시식권'
   const endTimeLabel = useMemo(
     () => formatShortTime(pass ? new Date(pass.expiresAt) : currentTime),
     [currentTime, pass],
@@ -576,25 +906,23 @@ function ActiveScreen({
       <section className="progress-card">
         <div className="amount-line">
           <span>오늘 누적 구매액</span>
-          <strong>{formatWon(portalDemo.dailyTotal)}</strong>
+          <strong>{formatWon(dailyTotal)}</strong>
         </div>
         <div className="progress-bar">
-          <span style={{ width: '50%' }} />
+          <span style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="split-line">
-          <span>다음 티어 {formatWon(portalDemo.nextTierAmount)}</span>
-          <strong>{formatWon(portalDemo.nextTierAmount - portalDemo.dailyTotal)} 남음</strong>
+          <span>다음 티어 {formatWon(nextTierAmount)}</span>
+          <strong>{formatWon(remainingAmount)} 남음</strong>
         </div>
-        <p>
-          Wi-Fi 종일권 · 음료 할인 · 신메뉴 시식권 중에서 고를 수 있습니다.
-        </p>
+        <p>{benefitsPreview} 중에서 고를 수 있습니다.</p>
       </section>
       <button type="button" className="portal-button primary" onClick={onReward}>
-        혜택 선택하기
+        {rewardCount > 0 ? '혜택 선택하기' : '혜택 확인하기'}
       </button>
       <div className="mini-actions">
         <button type="button" onClick={onCoupons}>
-          쿠폰함 1장
+          쿠폰함 {couponCount}장
         </button>
         <button type="button" onClick={onExtend}>
           시간 늘리는 방법
@@ -622,13 +950,17 @@ function ActiveScreen({
 }
 
 function RewardScreen({
+  rewardOptions,
   selectedRewardId,
   onSelectReward,
-  onCoupons,
+  onChooseReward,
+  errorMessage,
 }: {
+  rewardOptions: DisplayRewardOption[]
   selectedRewardId: string
   onSelectReward: (benefitId: string) => void
-  onCoupons: () => void
+  onChooseReward: (fulfillMode: RewardFulfillMode) => void
+  errorMessage: string
 }) {
   return (
     <PortalScreen eyebrow="REWARD UNLOCKED" accentEyebrow>
@@ -662,6 +994,7 @@ function RewardScreen({
           type="button"
           className="portal-button primary"
           disabled={!selectedRewardId}
+          onClick={() => onChooseReward('IMMEDIATE')}
         >
           지금 바로 사용
         </button>
@@ -669,33 +1002,67 @@ function RewardScreen({
           type="button"
           className="portal-button secondary"
           disabled={!selectedRewardId}
-          onClick={onCoupons}
+          onClick={() => onChooseReward('COUPON_7D')}
         >
           쿠폰으로 저장 (7일)
         </button>
+        {errorMessage && <span className="form-error">{errorMessage}</span>}
         <span>최종 적용 결과는 결제 응답 기준으로 확정됩니다.</span>
       </div>
     </PortalScreen>
   )
 }
 
-function CouponsScreen() {
+function CouponsScreen({
+  coupons,
+  couponCount,
+  errorMessage,
+  isLoading,
+  onRedeemCoupon,
+}: {
+  coupons: CustomerCoupon[]
+  couponCount: number
+  errorMessage: string
+  isLoading: boolean
+  onRedeemCoupon: (couponId: string) => void
+}) {
   return (
     <PortalScreen eyebrow="COUPONS">
-      <h1>쿠폰함 1장</h1>
+      <h1>쿠폰함 {couponCount}장</h1>
       <p className="screen-copy">저장한 쿠폰은 7일 이내에 사용할 수 있습니다.</p>
-      <section className="coupon-card">
-        <span>
-          <strong>디저트 10% 할인</strong>
-          <small>8월 5일까지 사용</small>
-        </span>
-        <button type="button">사용</button>
-      </section>
+      {isLoading && coupons.length === 0 ? (
+        <section className="notice-panel">
+          <strong>쿠폰을 불러오는 중입니다</strong>
+          <p>잠시만 기다려 주세요.</p>
+        </section>
+      ) : coupons.length === 0 ? (
+        <section className="notice-panel">
+          <strong>저장된 쿠폰이 없습니다</strong>
+          <p>리워드 선택 화면에서 쿠폰으로 저장하면 이곳에 표시됩니다.</p>
+        </section>
+      ) : (
+        coupons.map((coupon) => (
+          <section className="coupon-card" key={coupon.couponId}>
+            <span>
+              <strong>{getCouponTitle(coupon)}</strong>
+              <small>{getCouponMeta(coupon)}</small>
+            </span>
+            <button
+              type="button"
+              disabled={coupon.status !== 'AVAILABLE'}
+              onClick={() => onRedeemCoupon(coupon.couponId)}
+            >
+              {coupon.status === 'AVAILABLE' ? '사용' : getCouponStatusLabel(coupon.status)}
+            </button>
+          </section>
+        ))
+      )}
+      {errorMessage && <p className="form-error">{errorMessage}</p>}
     </PortalScreen>
   )
 }
 
-function ExtendScreen() {
+function ExtendScreen({ onAdditionalOrder }: { onAdditionalOrder: () => void }) {
   return (
     <PortalScreen eyebrow="EXTEND">
       <h1>추가 주문하시면 이용 시간이 늘어납니다</h1>
@@ -722,6 +1089,9 @@ function ExtendScreen() {
           </div>
         ))}
       </section>
+      <button type="button" className="portal-button primary" onClick={onAdditionalOrder}>
+        Demo POS에서 추가 주문하기
+      </button>
     </PortalScreen>
   )
 }
@@ -752,19 +1122,22 @@ function ExpiredScreen({
 }
 
 function BlockedScreen({
+  errorInfo,
   onReconnect,
   onPrivacy,
 }: {
+  errorInfo: PortalErrorInfo | null
   onReconnect: () => void
   onPrivacy: () => void
 }) {
   return (
     <PortalScreen eyebrow="/blocked">
-      <h1>이용권 연결을 다시 확인해 주세요</h1>
+      <h1>{errorInfo?.title ?? '이용권 연결을 다시 확인해 주세요'}</h1>
       <p className="screen-copy dark">
-        이 기기에서 이용권을 확인하지 못했습니다. 주문표 QR을 다시
-        스캔하시거나 직원에게 말씀해 주세요.
+        {errorInfo?.message ??
+          '이 기기에서 이용권을 확인하지 못했습니다. 주문표 QR을 다시 스캔하시거나 직원에게 말씀해 주세요.'}
       </p>
+      {errorInfo && <RequestInfoCard errorInfo={errorInfo} />}
       <section className="notice-panel">
         <strong>확인해 볼 항목</strong>
         <p>· 주문표에 인쇄된 QR을 다시 스캔해 주세요.</p>
@@ -781,18 +1154,21 @@ function BlockedScreen({
   )
 }
 
-function ErrorScreen({ onRetry }: { onRetry: () => void }) {
+function ErrorScreen({
+  errorInfo,
+  onRetry,
+}: {
+  errorInfo: PortalErrorInfo | null
+  onRetry: () => void
+}) {
   return (
     <PortalScreen eyebrow="/error">
-      <h1>잠시 후 다시 시도해 주세요</h1>
+      <h1>{errorInfo?.title ?? '잠시 후 다시 시도해 주세요'}</h1>
       <p className="screen-copy dark">
-        이용권 정보를 불러오지 못했습니다. 남은 이용 시간은 그대로 유지되며,
-        직원에게 말씀하시면 바로 확인해 드립니다.
+        {errorInfo?.message ??
+          '이용권 정보를 불러오지 못했습니다. 남은 이용 시간은 그대로 유지되며, 직원에게 말씀하시면 바로 확인해 드립니다.'}
       </p>
-      <section className="request-card">
-        <strong>요청 ID</strong>
-        <span>req_7f21c9 · 14:31:08</span>
-      </section>
+      {errorInfo && <RequestInfoCard errorInfo={errorInfo} />}
       <button type="button" className="portal-button primary" onClick={onRetry}>
         다시 시도
       </button>
@@ -800,18 +1176,38 @@ function ErrorScreen({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-function PrivacyScreen({ onBack }: { onBack: () => void }) {
+function RequestInfoCard({ errorInfo }: { errorInfo: PortalErrorInfo }) {
+  return (
+    <section className="request-card">
+      <strong>요청 정보</strong>
+      <span>
+        {errorInfo.requestId}
+        {errorInfo.status ? ` · HTTP ${errorInfo.status}` : ''}
+      </span>
+    </section>
+  )
+}
+
+function PrivacyScreen({
+  notice,
+  onBack,
+}: {
+  notice: PrivacyNoticeResponse
+  onBack: () => void
+}) {
   return (
     <PortalScreen eyebrow="/privacy">
       <h1>개인정보 · 보안 안내</h1>
       <div className="privacy-list">
         <PrivacyItem
           title="무엇을 보관하나요"
-          description="이용권 연결에 필요한 전화번호만 암호화해 보관합니다."
+          description={notice.phoneStorage}
         />
         <PrivacyItem
           title="언제 폐기하나요"
-          description="보관 기간 30일이 지나면 자동 폐기하고, 폐기 결과를 기록합니다."
+          description={`보관 기간 ${notice.phoneRetentionDays}일이 지나면 ${
+            notice.automaticDeletion ? '자동 폐기하고' : '폐기 대상에 포함하고'
+          }, 폐기 결과를 기록합니다.`}
         />
         <PrivacyItem
           title="수집하지 않는 것"
@@ -819,12 +1215,11 @@ function PrivacyScreen({ onBack }: { onBack: () => void }) {
         />
         <PrivacyItem
           title="왜 안내하나요"
-          description="불법 접속으로부터 매장을 보호하기 위한 최소한의 기록만 남깁니다."
+          description={notice.purpose}
         />
       </div>
       <p className="caption">
-        불법 접속 대응 기록은 점주 보호 목적으로만 보관하며, 목적을 달성하면
-        폐기합니다. 마케팅에는 사용하지 않습니다.
+        {notice.supportNote}
       </p>
       <button type="button" className="portal-button secondary" onClick={onBack}>
         이용권 화면으로
@@ -961,9 +1356,197 @@ function getInitialScreen({
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : '요청 처리 중 문제가 발생했습니다.'
+  if (error instanceof ApiError) {
+    return getApiErrorDetail(error) ?? '요청 처리 중 문제가 발생했습니다.'
+  }
+
+  return error instanceof Error ? error.message : '요청 처리 중 문제가 발생했습니다.'
+}
+
+function toPortalErrorInfo(error: unknown, fallbackCode: string): PortalErrorInfo {
+  if (error instanceof ApiError) {
+    const body = getApiErrorBody(error)
+    const title =
+      getStringValue(body?.title) ??
+      getPortalErrorTitle(error.status) ??
+      '요청을 처리하지 못했습니다'
+    const message =
+      getStringValue(body?.detail) ??
+      getStringValue(body?.message) ??
+      '주문표 QR 또는 이용권 상태를 다시 확인해 주세요.'
+    const requestId =
+      getStringValue(body?.requestId) ??
+      getStringValue(body?.meta?.requestId) ??
+      `local_${fallbackCode.toLowerCase()}`
+
+    return {
+      title,
+      message,
+      requestId,
+      status: error.status,
+    }
+  }
+
+  return {
+    title: '요청을 처리하지 못했습니다',
+    message: getErrorMessage(error),
+    requestId: `local_${fallbackCode.toLowerCase()}`,
+  }
+}
+
+function getApiErrorDetail(error: ApiError) {
+  const body = getApiErrorBody(error)
+  if (!body) return null
+
+  return (
+    getStringValue(body.detail) ??
+    getStringValue(body.message) ??
+    getStringValue(body.error?.message)
+  )
+}
+
+function getApiErrorBody(error: ApiError) {
+  if (!error.body || typeof error.body !== 'object') return null
+
+  return error.body as {
+    detail?: unknown
+    message?: unknown
+    title?: unknown
+    requestId?: unknown
+    meta?: { requestId?: unknown }
+    error?: { message?: unknown }
+  }
+}
+
+function getStringValue(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function getPortalErrorTitle(status: number) {
+  if (status === 401 || status === 403) return '본인 확인이 다시 필요합니다'
+  if (status === 404 || status === 410) return '주문표 QR을 다시 확인해 주세요'
+  if (status === 409) return '이미 처리된 이용권입니다'
+  if (status === 422) return '입력 정보를 다시 확인해 주세요'
+  if (status >= 500) return '잠시 후 다시 시도해 주세요'
+
+  return null
+}
+
+function isRecoverableClaimError(error: unknown) {
+  return error instanceof ApiError && [404, 409, 410, 422].includes(error.status)
+}
+
+function isBlockedPassError(error: unknown) {
+  return error instanceof ApiError && [401, 403, 404, 409, 410, 422].includes(error.status)
+}
+
+function readStoredRewardGrantIds() {
+  const rawValue = window.sessionStorage.getItem('portalRewardGrantIds')
+  if (!rawValue) return []
+
+  try {
+    const parsedValue = JSON.parse(rawValue)
+
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter((item): item is string => typeof item === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function toDisplayRewardOption(option: RewardOption): DisplayRewardOption {
+  return {
+    benefitId: option.benefitId,
+    title: option.title,
+    description: getRewardDescription(option),
+    recommended: option.recommended,
+  }
+}
+
+function normalizePrivacyNotice(
+  notice: PrivacyNoticeResponse,
+): PrivacyNoticeResponse {
+  return {
+    ...fallbackPrivacyNotice,
+    storeId: notice.storeId || fallbackPrivacyNotice.storeId,
+    storeName: getCleanText(notice.storeName, fallbackPrivacyNotice.storeName),
+    phoneStorage: getCleanText(notice.phoneStorage, fallbackPrivacyNotice.phoneStorage),
+    phoneRetentionDays:
+      typeof notice.phoneRetentionDays === 'number'
+        ? notice.phoneRetentionDays
+        : fallbackPrivacyNotice.phoneRetentionDays,
+    automaticDeletion:
+      typeof notice.automaticDeletion === 'boolean'
+        ? notice.automaticDeletion
+        : fallbackPrivacyNotice.automaticDeletion,
+    purpose: getCleanText(notice.purpose, fallbackPrivacyNotice.purpose),
+    supportNote: getCleanText(notice.supportNote, fallbackPrivacyNotice.supportNote),
+  }
+}
+
+function getCleanText(value: string, fallbackValue: string) {
+  return looksMojibake(value) ? fallbackValue : value
+}
+
+function looksMojibake(value: string) {
+  return /[ÃÂ�]|ì|ë|í|ê/.test(value)
+}
+
+function getRewardDescription(option: RewardOption) {
+  const descriptions: Record<string, string> = {
+    FREE_SIZE_UP: '라떼를 자주 주문하셨습니다',
+    FREE_SHOT: '오늘 두 잔 이상 주문하셨습니다',
+    DESSERT_DISCOUNT: '디저트를 자주 주문하셨습니다',
+    WIFI_DAY_PASS: '오늘 하루 Wi-Fi를 계속 이용할 수 있습니다',
+    DRINK_DISCOUNT: '음료 할인 혜택을 받을 수 있습니다',
+  }
+
+  return descriptions[option.type] ?? '선택 가능한 리워드 혜택입니다'
+}
+
+function formatBenefitLabel(value: string) {
+  const labels: Record<string, string> = {
+    FREE_SIZE_UP: '무료 사이즈업',
+    FREE_SHOT: '샷 추가',
+    DESSERT_DISCOUNT: '디저트 할인',
+    WIFI_DAY_PASS: 'Wi-Fi 종일권',
+    DRINK_DISCOUNT: '음료 할인',
+  }
+
+  return labels[value] ?? value
+}
+
+function getCouponTitle(coupon: CustomerCoupon) {
+  const title = coupon.benefit.title
+  if (typeof title === 'string') return title
+
+  const benefitType = coupon.benefit.benefitType
+  if (benefitType === 'DESSERT_DISCOUNT') return '디저트 할인'
+  if (benefitType === 'DRINK_DISCOUNT') return '음료 할인'
+  if (benefitType === 'FREE_SIZE_UP') return '무료 사이즈업'
+
+  return '리워드 쿠폰'
+}
+
+function getCouponMeta(coupon: CustomerCoupon) {
+  if (coupon.status === 'REDEEMED' && coupon.redeemedAt) {
+    return `${formatShortDate(new Date(coupon.redeemedAt))} 사용 완료`
+  }
+
+  if (coupon.status === 'EXPIRED') return '만료된 쿠폰'
+
+  return `${formatShortDate(new Date(coupon.expiresAt))}까지 사용`
+}
+
+function getCouponStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    REDEEMED: '사용 완료',
+    EXPIRED: '만료',
+    REVOKED: '취소',
+  }
+
+  return labels[status] ?? status
 }
 
 function getEffectivePassStatus(
@@ -1022,6 +1605,14 @@ function formatShortTime(date: Date) {
   }).format(date)
 }
 
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+  }).format(date)
+}
+
 function normalizeDigits(value: string) {
   return value.replace(/\D/g, '')
 }
+
