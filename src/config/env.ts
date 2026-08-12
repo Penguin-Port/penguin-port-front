@@ -1,6 +1,16 @@
 const viteEnv = import.meta.env
 
+export type AppMode = 'all' | 'admin' | 'customer'
+
+function resolveAppMode(): AppMode {
+  const configuredMode = viteEnv.VITE_APP_MODE
+  if (configuredMode === 'admin' || configuredMode === 'customer') return configuredMode
+  if (viteEnv.MODE === 'admin' || viteEnv.MODE === 'customer') return viteEnv.MODE
+  return 'all'
+}
+
 export const env = {
+  appMode: resolveAppMode(),
   apiBaseUrl: viteEnv.VITE_API_BASE_URL ?? '',
   useCustomerApi: viteEnv.VITE_USE_CUSTOMER_API === '1',
   demoStoreId: viteEnv.VITE_DEMO_STORE_ID ?? '',
