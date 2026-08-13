@@ -89,6 +89,7 @@ export interface RewardOption {
   title: string
   payload: Record<string, unknown>
   recommended: boolean
+  recommendationReason?: string | null
 }
 
 export interface RewardOptionsResponse {

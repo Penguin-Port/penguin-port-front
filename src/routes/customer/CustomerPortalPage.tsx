@@ -9,7 +9,7 @@ import {
   rewardOptions as fallbackRewardOptions,
 } from './customerMock'
 import { customerPortalService } from './customerService'
-import type { PortalOrder, Screen } from './customerTypes'
+import type { MenuItem, PortalOrder, Screen } from './customerTypes'
 import type {
   CustomerCoupon,
   CustomerPass,
@@ -43,6 +43,11 @@ type DisplayRewardOption = {
   title: string
   description: string
   recommended: boolean
+}
+
+type PolicyTier = {
+  minAmount: number
+  bonusMinutes: number
 }
 
 type PortalErrorInfo = {
@@ -109,6 +114,7 @@ export function CustomerPortalPage() {
   const [availableRewardOptions, setAvailableRewardOptions] = useState<
     DisplayRewardOption[]
   >([])
+  const [rewardTierAmount, setRewardTierAmount] = useState<number | null>(null)
   const [rewardError, setRewardError] = useState('')
   const [couponCount, setCouponCount] = useState(0)
   const [coupons, setCoupons] = useState<CustomerCoupon[]>([])
@@ -190,9 +196,12 @@ export function CustomerPortalPage() {
 
         setPortalOrder({
           orderClaim: claimForDemo,
-          storeName: response.storeName,
+          storeName: getCleanText(response.storeName, portalDemo.storeName),
           orderNo: response.orderNo,
-          items: response.items,
+          items: response.items.map((item) => ({
+            ...item,
+            name: getCleanText(item.name, '주문 상품'),
+          })),
           paidAmount: response.paidAmount,
           providedMinutes: response.providedMinutes,
         })
@@ -313,6 +322,7 @@ export function CustomerPortalPage() {
     const grantId = rewardGrantIds[0]
     if (!savedSession || !grantId) {
       setAvailableRewardOptions([])
+      setRewardTierAmount(null)
       return
     }
 
@@ -320,11 +330,13 @@ export function CustomerPortalPage() {
       .getRewardOptions({ grantId, portalSession: savedSession })
       .then((response) => {
         setAvailableRewardOptions(response.options.map(toDisplayRewardOption))
+        setRewardTierAmount(response.tierAmount)
         setRewardError('')
       })
       .catch((error) => {
         setRewardError(getErrorMessage(error))
         setAvailableRewardOptions([])
+        setRewardTierAmount(null)
       })
   }, [rewardGrantIds, screen])
 
@@ -596,6 +608,7 @@ export function CustomerPortalPage() {
         )}
         {screen === 'reward' && (
           <RewardScreen
+            tierAmount={rewardTierAmount}
             rewardOptions={
               availableRewardOptions.length > 0
                 ? availableRewardOptions
@@ -617,10 +630,16 @@ export function CustomerPortalPage() {
           />
         )}
         {screen === 'extend' && (
-          <ExtendScreen onAdditionalOrder={() => navigate('/app/demo-pos?mode=extend')} />
+          <ExtendScreen
+            pass={activePass}
+            upsellHint={upsellHint}
+            onAdditionalOrder={() => navigate('/app/demo-pos?mode=extend')}
+          />
         )}
         {screen === 'expired' && (
           <ExpiredScreen
+            pass={activePass}
+            upsellHint={upsellHint}
             onExtend={() => goToScreen('extend')}
             onCoupons={() => goToScreen('coupons')}
           />
@@ -675,7 +694,7 @@ function QrEntryScreen({
       <h1>
         주문 고객에게
         <br />
-        무료 Wi-Fi 이용권 2시간 제공
+        무료 Wi-Fi 이용권 {formatMinutes(portalOrder.providedMinutes)} 제공
       </h1>
       <p className="screen-copy">
         주문표 QR로 안전하게 이용권을 연결합니다. 추가 주문 시 이용 시간이
@@ -684,7 +703,7 @@ function QrEntryScreen({
       <InfoCard
         title="확인된 주문 / orderClaim"
         rows={[
-          ['매장', portalOrder.storeName.replace('팽귄포트 ', '')],
+          ['매장', portalOrder.storeName],
           ['주문번호', portalOrder.orderNo],
           ['주문 금액', formatWon(portalOrder.paidAmount)],
           ['제공 이용권', formatMinutes(portalOrder.providedMinutes)],
@@ -816,7 +835,9 @@ function StartScreen({
   onPrivacyConsentChange: (checked: boolean) => void
   onStart: () => void
 }) {
-  const bonusMinutes = Math.max(0, portalOrder.providedMinutes - portalDemo.baseMinutes)
+  const expectedEndTime = new Date(
+    Date.now() + portalOrder.providedMinutes * 60 * 1000,
+  )
 
   return (
     <PortalScreen eyebrow="STEP 3 · 이용 시작">
@@ -826,9 +847,9 @@ function StartScreen({
       </p>
       <InfoCard
         rows={[
-          ['첫 주문 기본', formatMinutes(portalDemo.baseMinutes)],
-          ['금액 구간 보너스', `+${bonusMinutes}분`],
-          ['이용 종료 예정', '오후 5:01'],
+          ['주문 금액', formatWon(portalOrder.paidAmount)],
+          ['제공 이용시간', formatMinutes(portalOrder.providedMinutes)],
+          ['이용 종료 예정', formatShortTime(expectedEndTime)],
         ]}
       />
       <ConsentCard
@@ -879,10 +900,13 @@ function ActiveScreen({
   onPrivacy: () => void
 }) {
   const status = getEffectivePassStatus(pass?.status ?? 'ACTIVE', secondsLeft)
+  const policySummaryRows = getPolicySummaryRows(pass)
+  const bonusMinutes = getPolicyBonusMinutes(pass)
   const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? portalDemo.dailyTotal
-  const nextTierAmount = upsellHint?.nextTierAmount ?? portalDemo.nextTierAmount
+  const nextTierAmount = upsellHint ? upsellHint.nextTierAmount : portalDemo.nextTierAmount
   const remainingAmount =
-    upsellHint?.remainingAmountToNextTier ?? Math.max(0, nextTierAmount - dailyTotal)
+    upsellHint?.remainingAmountToNextTier ??
+    (nextTierAmount ? Math.max(0, nextTierAmount - dailyTotal) : 0)
   const progressPercent = nextTierAmount
     ? Math.min(100, Math.round((dailyTotal / nextTierAmount) * 100))
     : 100
@@ -898,11 +922,15 @@ function ActiveScreen({
     <PortalScreen className="active-view">
       <div className="chips">
         <span className="chip live">{getPassStatusLabel(status)}</span>
-        <span className="chip">한산 시간대 자동연장</span>
+        {bonusMinutes > 0 ? (
+          <span className="chip">보너스 +{bonusMinutes}분</span>
+        ) : (
+          <span className="chip">정책 반영</span>
+        )}
       </div>
       <p className="timer-label">남은 이용 시간</p>
       <p className="timer-large">{formatRemaining(secondsLeft)}</p>
-      <p className="caption">오후 {endTimeLabel} 까지 · 매장 시간 기준</p>
+      <p className="caption">{endTimeLabel} 까지 · 매장 시간 기준</p>
       <section className="progress-card">
         <div className="amount-line">
           <span>오늘 누적 구매액</span>
@@ -912,8 +940,17 @@ function ActiveScreen({
           <span style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="split-line">
-          <span>다음 티어 {formatWon(nextTierAmount)}</span>
-          <strong>{formatWon(remainingAmount)} 남음</strong>
+          {nextTierAmount ? (
+            <>
+              <span>다음 티어 {formatWon(nextTierAmount)}</span>
+              <strong>{formatWon(remainingAmount)} 남음</strong>
+            </>
+          ) : (
+            <>
+              <span>오늘 적용 가능한 최고 티어</span>
+              <strong>달성</strong>
+            </>
+          )}
         </div>
         <p>{benefitsPreview} 중에서 고를 수 있습니다.</p>
       </section>
@@ -929,18 +966,12 @@ function ActiveScreen({
         </button>
       </div>
       <dl className="summary-list">
-        <div>
-          <dt>첫 주문 기본</dt>
-          <dd>2시간</dd>
-        </div>
-        <div>
-          <dt>금액 구간 보너스</dt>
-          <dd>+30분</dd>
-        </div>
-        <div>
-          <dt>한산 시간대 자동연장</dt>
-          <dd>적용 대상</dd>
-        </div>
+        {policySummaryRows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
       </dl>
       <button type="button" className="text-link left" onClick={onPrivacy}>
         개인정보 · 보안 안내
@@ -950,12 +981,14 @@ function ActiveScreen({
 }
 
 function RewardScreen({
+  tierAmount,
   rewardOptions,
   selectedRewardId,
   onSelectReward,
   onChooseReward,
   errorMessage,
 }: {
+  tierAmount: number | null
   rewardOptions: DisplayRewardOption[]
   selectedRewardId: string
   onSelectReward: (benefitId: string) => void
@@ -964,7 +997,11 @@ function RewardScreen({
 }) {
   return (
     <PortalScreen eyebrow="REWARD UNLOCKED" accentEyebrow>
-      <h1>누적 구매액 10,000원 달성!</h1>
+      <h1>
+        {tierAmount
+          ? `누적 구매액 ${formatWon(tierAmount)} 달성!`
+          : '리워드 혜택이 열렸습니다!'}
+      </h1>
       <p className="screen-copy">
         받은 혜택 하나를 선택해 주세요. 자동으로 선택되지 않습니다.
       </p>
@@ -1062,7 +1099,27 @@ function CouponsScreen({
   )
 }
 
-function ExtendScreen({ onAdditionalOrder }: { onAdditionalOrder: () => void }) {
+function ExtendScreen({
+  pass,
+  upsellHint,
+  onAdditionalOrder,
+}: {
+  pass: CustomerPass | null
+  upsellHint: UpsellHintResponse | null
+  onAdditionalOrder: () => void
+}) {
+  const tierRows = getPolicyTierRows(pass)
+  const nextTierAmount = upsellHint ? upsellHint.nextTierAmount : portalDemo.nextTierAmount
+  const remainingAmount =
+    upsellHint?.remainingAmountToNextTier ??
+    (nextTierAmount
+      ? Math.max(0, nextTierAmount - (upsellHint?.dailyTotal ?? portalDemo.dailyTotal))
+      : 0)
+  const benefitsPreview =
+    upsellHint?.nextTierBenefitsPreview?.map(formatBenefitLabel).join(' · ') ??
+    '다음 리워드'
+  const suggestedItems = getSuggestedItems(upsellHint)
+
   return (
     <PortalScreen eyebrow="EXTEND">
       <h1>추가 주문하시면 이용 시간이 늘어납니다</h1>
@@ -1071,15 +1128,30 @@ function ExtendScreen({ onAdditionalOrder }: { onAdditionalOrder: () => void }) 
         시간이 자동으로 늘어납니다.
       </p>
       <div className="tier-list">
-        <TierItem label="3,000원 이상 추가 주문" value="+20분" />
-        <TierItem label="5,000원 이상 추가 주문" value="+30분" />
-        <TierItem label="8,000원 이상 추가 주문" value="+45분" />
-        <TierItem label="누적 20,000원 티어 혜택" value="종일권" />
+        {tierRows.map((tier) => (
+          <TierItem
+            key={`${tier.minAmount}-${tier.bonusMinutes}`}
+            label={`${formatWon(tier.minAmount)} 이상 주문`}
+            value={`+${tier.bonusMinutes}분`}
+          />
+        ))}
+        {nextTierAmount ? (
+          <TierItem
+            label={`누적 ${formatWon(nextTierAmount)} 티어 혜택`}
+            value={benefitsPreview}
+          />
+        ) : (
+          <TierItem label="오늘 적용 가능한 최고 티어" value="달성" />
+        )}
       </div>
       <section className="recommend-card">
         <p>오늘 추천 · 누적 리워드까지</p>
-        <h2>1,500원만 더 구매하면 무료 사이즈업 혜택을 받을 수 있습니다.</h2>
-        {recommendedItems.map((item) => (
+        <h2>
+          {remainingAmount > 0
+            ? `${formatWon(remainingAmount)}만 더 구매하면 ${benefitsPreview} 혜택에 가까워집니다.`
+            : '오늘 선택 가능한 리워드 혜택을 확인해 보세요.'}
+        </h2>
+        {suggestedItems.map((item) => (
           <div key={item.id} className="menu-row">
             <span>
               <strong>{item.name}</strong>
@@ -1097,19 +1169,31 @@ function ExtendScreen({ onAdditionalOrder }: { onAdditionalOrder: () => void }) 
 }
 
 function ExpiredScreen({
+  pass,
+  upsellHint,
   onExtend,
   onCoupons,
 }: {
+  pass: CustomerPass | null
+  upsellHint: UpsellHintResponse | null
   onExtend: () => void
   onCoupons: () => void
 }) {
+  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? portalDemo.dailyTotal
+  const remainingAmount = upsellHint?.remainingAmountToNextTier ?? portalDemo.remainingToReward
+  const benefitsPreview =
+    upsellHint?.nextTierBenefitsPreview?.map(formatBenefitLabel).join(' · ') ??
+    '다음 리워드'
+
   return (
     <PortalScreen eyebrow="/expired">
       <h1>이용 시간이 모두 사용되었습니다</h1>
       <p className="screen-copy dark">
         추가 주문과 당일 누적 리워드로 이용을 이어갈 수 있습니다. 오늘 누적
-        8,500원 · 1,500원 더 구매하면 무료 사이즈업 · 무료 샷 추가 · 디저트
-        할인 중에서 선택할 수 있습니다.
+        {` ${formatWon(dailyTotal)}`}
+        {remainingAmount > 0
+          ? ` · ${formatWon(remainingAmount)} 더 구매하면 ${benefitsPreview} 혜택에 가까워집니다.`
+          : ` · ${benefitsPreview} 혜택을 확인해 보세요.`}
       </p>
       <button type="button" className="portal-button primary" onClick={onExtend}>
         시간 늘리는 방법 보기
@@ -1366,13 +1450,14 @@ function getErrorMessage(error: unknown) {
 function toPortalErrorInfo(error: unknown, fallbackCode: string): PortalErrorInfo {
   if (error instanceof ApiError) {
     const body = getApiErrorBody(error)
+    const apiTitle = getCleanText(getStringValue(body?.title), '')
     const title =
-      getStringValue(body?.title) ??
-      getPortalErrorTitle(error.status) ??
+      apiTitle ||
+      getPortalErrorTitle(error.status) ||
       '요청을 처리하지 못했습니다'
     const message =
-      getStringValue(body?.detail) ??
-      getStringValue(body?.message) ??
+      getCleanText(getStringValue(body?.detail), '') ||
+      getCleanText(getStringValue(body?.message), '') ||
       '주문표 QR 또는 이용권 상태를 다시 확인해 주세요.'
     const requestId =
       getStringValue(body?.requestId) ??
@@ -1455,10 +1540,109 @@ function readStoredRewardGrantIds() {
   }
 }
 
+function getPolicySummaryRows(pass: CustomerPass | null): [string, string][] {
+  const snapshot = getPolicySnapshot(pass)
+  const baseMinutes = getRecordNumber(snapshot, 'baseMinutes')
+  const bonusMinutes = getRecordNumber(snapshot, 'bonusMinutes')
+  const amount = getRecordNumber(snapshot, 'amount')
+  const orderType = getRecordString(snapshot, 'orderType')
+  const rows: [string, string][] = []
+
+  if (baseMinutes !== null) rows.push(['기본 제공 시간', formatMinutes(baseMinutes)])
+  if (bonusMinutes !== null && bonusMinutes > 0) {
+    rows.push(['금액 구간 보너스', `+${bonusMinutes}분`])
+  }
+  if (amount !== null) rows.push(['정책 적용 금액', formatWon(amount)])
+  if (orderType) rows.push(['주문 구분', getOrderTypeLabel(orderType)])
+
+  return rows.length > 0
+    ? rows
+    : [
+        ['기본 제공 시간', formatMinutes(portalDemo.baseMinutes)],
+        ['금액 구간 보너스', `+${portalDemo.bonusMinutes}분`],
+      ]
+}
+
+function getPolicyBonusMinutes(pass: CustomerPass | null) {
+  return getRecordNumber(getPolicySnapshot(pass), 'bonusMinutes') ?? 0
+}
+
+function getPolicyTierRows(pass: CustomerPass | null): PolicyTier[] {
+  const tiers = getPolicySnapshot(pass).tiers
+  if (Array.isArray(tiers)) {
+    const normalizedTiers = tiers
+      .map((tier) => {
+        if (!isRecord(tier)) return null
+
+        const minAmount = getRecordNumber(tier, 'minAmount')
+        const bonusMinutes = getRecordNumber(tier, 'bonusMinutes')
+        if (minAmount === null || bonusMinutes === null) return null
+
+        return { minAmount, bonusMinutes }
+      })
+      .filter((tier): tier is PolicyTier => Boolean(tier))
+
+    if (normalizedTiers.length > 0) return normalizedTiers
+  }
+
+  return [
+    {
+      minAmount: portalDemo.paidAmount,
+      bonusMinutes: portalDemo.bonusMinutes,
+    },
+  ]
+}
+
+function getPolicySnapshot(pass: CustomerPass | null) {
+  return pass?.policySnapshot ?? {}
+}
+
+function getSuggestedItems(upsellHint: UpsellHintResponse | null): MenuItem[] {
+  if (upsellHint?.suggestedItems && upsellHint.suggestedItems.length > 0) {
+    return upsellHint.suggestedItems.map((item) => ({
+      id: item.productId,
+      name: getCleanText(item.name, '추천 메뉴'),
+      description: '오늘 추천 메뉴',
+      price: item.price,
+    }))
+  }
+
+  return recommendedItems.map((item) => ({
+    ...item,
+    name: getCleanText(item.name, '추천 메뉴'),
+    description: getCleanText(item.description, '오늘 추천 메뉴'),
+  }))
+}
+
+function getOrderTypeLabel(orderType: string) {
+  const labels: Record<string, string> = {
+    FIRST: '첫 주문',
+    ADDITIONAL: '추가 주문',
+  }
+
+  return labels[orderType] ?? orderType
+}
+
+function getRecordNumber(record: Record<string, unknown>, key: string) {
+  const value = record[key]
+
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function getRecordString(record: Record<string, unknown>, key: string) {
+  const value = record[key]
+
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function toDisplayRewardOption(option: RewardOption): DisplayRewardOption {
   return {
     benefitId: option.benefitId,
-    title: option.title,
+    title: getCleanText(option.title, formatBenefitLabel(option.type)),
     description: getRewardDescription(option),
     recommended: option.recommended,
   }
@@ -1485,12 +1669,28 @@ function normalizePrivacyNotice(
   }
 }
 
-function getCleanText(value: string, fallbackValue: string) {
-  return looksMojibake(value) ? fallbackValue : value
+function getCleanText(value: string | null | undefined, fallbackValue: string) {
+  if (!value) return fallbackValue
+
+  const repairedValue = repairMojibake(value).trim()
+  if (!repairedValue || looksMojibake(repairedValue)) return fallbackValue
+
+  return repairedValue
+}
+
+function repairMojibake(value: string) {
+  if (!looksMojibake(value)) return value
+
+  try {
+    const bytes = Uint8Array.from([...value].map((char) => char.charCodeAt(0) & 0xff))
+    return new TextDecoder('utf-8').decode(bytes)
+  } catch {
+    return value
+  }
 }
 
 function looksMojibake(value: string) {
-  return /[ÃÂ�]|ì|ë|í|ê/.test(value)
+  return /[ÃÂ�]|[ìëíê][\u0080-\u00ff]?|[\u0080-\u009f]/.test(value)
 }
 
 function getRewardDescription(option: RewardOption) {
@@ -1502,7 +1702,10 @@ function getRewardDescription(option: RewardOption) {
     DRINK_DISCOUNT: '음료 할인 혜택을 받을 수 있습니다',
   }
 
-  return descriptions[option.type] ?? '선택 가능한 리워드 혜택입니다'
+  return getCleanText(
+    option.recommendationReason,
+    descriptions[option.type] ?? '선택 가능한 리워드 혜택입니다',
+  )
 }
 
 function formatBenefitLabel(value: string) {
@@ -1514,12 +1717,12 @@ function formatBenefitLabel(value: string) {
     DRINK_DISCOUNT: '음료 할인',
   }
 
-  return labels[value] ?? value
+  return labels[value] ?? getCleanText(value, value)
 }
 
 function getCouponTitle(coupon: CustomerCoupon) {
   const title = coupon.benefit.title
-  if (typeof title === 'string') return title
+  if (typeof title === 'string') return getCleanText(title, '리워드 쿠폰')
 
   const benefitType = coupon.benefit.benefitType
   if (benefitType === 'DESSERT_DISCOUNT') return '디저트 할인'
