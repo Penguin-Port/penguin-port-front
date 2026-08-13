@@ -17,6 +17,10 @@ export type MenuItem = {
   name: string
   description: string
   price: number
+  originalPrice?: number
+  discountRate?: number
+  promotionTitle?: string
+  promotionEndsAt?: string
 }
 
 export type PortalOrderItem = {

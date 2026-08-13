@@ -78,6 +78,11 @@ export interface UpsellHintResponse {
     productId: string
     name: string
     price: number
+    originalPrice?: number | null
+    discountRate?: number | null
+    discountedPrice?: number | null
+    promotionTitle?: string | null
+    promotionEndsAt?: string | null
   }>
 }
 

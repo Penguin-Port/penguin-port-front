@@ -573,6 +573,26 @@
   font-size: 14px;
 }
 
+.customer-portal .menu-price-stack {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+
+.customer-portal .menu-price-stack em {
+  color: #ff3562;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.customer-portal .menu-price-stack del {
+  color: #8f8f8f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .customer-portal .notice-panel {
   display: grid;
   gap: 8px;

@@ -1159,7 +1159,13 @@ function ExtendScreen({
               <strong>{item.name}</strong>
               <small>{item.description}</small>
             </span>
-            <b>{formatWon(item.price)}</b>
+            <span className="menu-price-stack">
+              {item.discountRate ? <em>{item.discountRate}% 할인</em> : null}
+              {item.originalPrice && item.originalPrice > item.price ? (
+                <del>{formatWon(item.originalPrice)}</del>
+              ) : null}
+              <b>{formatWon(item.price)}</b>
+            </span>
           </div>
         ))}
       </section>
@@ -1606,8 +1612,14 @@ function getSuggestedItems(upsellHint: UpsellHintResponse | null): MenuItem[] {
     return upsellHint.suggestedItems.map((item) => ({
       id: item.productId,
       name: getCleanText(item.name, '추천 메뉴'),
-      description: '오늘 추천 메뉴',
-      price: item.price,
+      description: item.discountRate
+        ? getCleanText(item.promotionTitle ?? '', `${item.discountRate}% 할인 적용 중`)
+        : '오늘 추천 메뉴',
+      price: item.discountedPrice ?? item.price,
+      originalPrice: item.originalPrice ?? item.price,
+      discountRate: item.discountRate ?? undefined,
+      promotionTitle: item.promotionTitle ?? undefined,
+      promotionEndsAt: item.promotionEndsAt ?? undefined,
     }))
   }
 
