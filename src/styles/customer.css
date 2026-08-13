@@ -830,6 +830,123 @@
   cursor: not-allowed;
 }
 
+.demo-pos__qr-receipt {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  padding: 28px;
+  border: 1px solid #dedede;
+  border-radius: 12px;
+  background: #fafafa;
+  text-align: center;
+}
+
+.demo-pos__qr-copy span {
+  color: #ff385c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.demo-pos__qr-copy h2 {
+  margin: 6px 0 8px;
+  font-size: 24px;
+}
+
+.demo-pos__qr-copy p {
+  max-width: 460px;
+  font-size: 14px;
+}
+
+.demo-pos__qr-image {
+  display: grid;
+  place-items: center;
+  width: min(100%, 300px);
+  padding: 14px;
+  border: 1px solid #e1e1e1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.demo-pos__qr-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.demo-pos__qr-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.demo-pos__qr-meta span {
+  color: #717171;
+}
+
+.demo-pos__qr-link {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.demo-pos__qr-link span {
+  color: #717171;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.demo-pos__qr-link input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  background: #fff;
+  color: #444;
+  font-size: 13px;
+}
+
+.demo-pos__qr-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.demo-pos__qr-actions button,
+.demo-pos__qr-actions a,
+.demo-pos__new-order {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.demo-pos__qr-actions button {
+  border: 1px solid #1a1a1a;
+  background: #fff;
+  color: #1a1a1a;
+}
+
+.demo-pos__qr-actions a {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.demo-pos__new-order {
+  min-height: auto;
+  border: 0;
+  background: transparent;
+  color: #717171;
+  font-size: 13px;
+}
+
 @media (max-width: 640px) {
   .demo-pos {
     display: block;
@@ -854,5 +971,13 @@
 
   .demo-pos__menus {
     grid-template-columns: 1fr;
+  }
+
+  .demo-pos__qr-receipt {
+    padding: 22px 16px;
+  }
+
+  .demo-pos__qr-copy h2 {
+    font-size: 21px;
   }
 }

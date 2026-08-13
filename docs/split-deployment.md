@@ -32,6 +32,7 @@ VITE_ADMIN_PASSWORD=<demo-admin-password>
 ```env
 VITE_API_BASE_URL=https://<backend-domain>
 VITE_USE_CUSTOMER_API=1
+VITE_CUSTOMER_APP_URL=https://penguin-port-customer.pages.dev
 VITE_DEMO_STORE_ID=<demo-store-id>
 VITE_DEMO_PRODUCT_ID=<demo-product-id>
 ```
