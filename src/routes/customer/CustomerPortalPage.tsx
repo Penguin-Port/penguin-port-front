@@ -286,9 +286,11 @@ export function CustomerPortalPage() {
       }
     }
 
+    void refreshPass()
+
     const timer = window.setInterval(() => {
       void refreshPass()
-    }, 30000)
+    }, PASS_REFRESH_INTERVAL_MS)
 
     window.addEventListener('focus', refreshPass)
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -1539,6 +1541,8 @@ function readStoredRewardGrantIds() {
     return []
   }
 }
+
+const PASS_REFRESH_INTERVAL_MS = 10_000
 
 function getPolicySummaryRows(pass: CustomerPass | null): [string, string][] {
   const snapshot = getPolicySnapshot(pass)
