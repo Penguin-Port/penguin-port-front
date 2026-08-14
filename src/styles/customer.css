@@ -272,6 +272,16 @@
   color: #1a1a1a;
 }
 
+.customer-portal .sync-notice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #ff385c;
+  background: #fff1f4;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
 .customer-portal .consent-card {
   min-height: 68px;
   display: flex;
@@ -573,6 +583,26 @@
   font-size: 14px;
 }
 
+.customer-portal .menu-price-stack {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+
+.customer-portal .menu-price-stack em {
+  color: #ff3562;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.customer-portal .menu-price-stack del {
+  color: #8f8f8f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .customer-portal .notice-panel {
   display: grid;
   gap: 8px;
@@ -763,6 +793,34 @@
 .demo-pos__menus span,
 .demo-pos__menus strong {
   font-weight: 800;
+}
+
+.demo-pos__menu-name,
+.demo-pos__menu-price {
+  display: grid;
+  gap: 4px;
+}
+
+.demo-pos__menu-name {
+  justify-items: start;
+  text-align: left;
+}
+
+.demo-pos__menu-name small {
+  color: #ff385c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.demo-pos__menu-price {
+  justify-items: end;
+  text-align: right;
+}
+
+.demo-pos__menu-price del {
+  color: #8f8f8f;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .demo-pos__summary {

@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { adminApi } from '../../api/admin'
 import { posApi } from '../../api/pos'
 import { env, isApiConfigured } from '../../config/env'
+import type { TimeSaleRecommendation } from '../../types/admin'
+import { mapApiRecommendation } from '../../utils/adminApiMappers'
 
 const demoMenus = [
   {
@@ -21,6 +24,13 @@ const demoMenus = [
     price: 6000,
   },
 ]
+
+type DemoMenu = (typeof demoMenus)[number]
+
+type PosPromotion = {
+  title: string
+  discountRate: number
+}
 
 interface QrReceipt {
   connectUrl: string
@@ -47,17 +57,47 @@ export function DemoPosPage() {
   const [phone, setPhone] = useState(
     window.sessionStorage.getItem('portalPhone') ?? '01011111111',
   )
+  const [menuPromotions, setMenuPromotions] = useState<Record<string, PosPromotion>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [qrReceipt, setQrReceipt] = useState<QrReceipt | null>(null)
   const [isCopied, setIsCopied] = useState(false)
 
+  const canUseApi = env.useCustomerApi && isApiConfigured
+
+  useEffect(() => {
+    if (!canUseApi) return
+
+    let isCanceled = false
+
+    adminApi
+      .getRecommendations()
+      .then((response) => {
+        if (isCanceled) return
+        setMenuPromotions(getDemoMenuPromotions(response.data.map(mapApiRecommendation)))
+      })
+      .catch(() => {
+        if (!isCanceled) setMenuPromotions({})
+      })
+
+    return () => {
+      isCanceled = true
+    }
+  }, [canUseApi])
+
   const selectedMenus = useMemo(
     () => demoMenus.filter((item) => selectedIds.includes(item.id)),
     [selectedIds],
   )
-  const totalAmount = selectedMenus.reduce((sum, item) => sum + item.price, 0)
-  const canUseApi = env.useCustomerApi && isApiConfigured
+  const pricedSelectedMenus = useMemo(
+    () => selectedMenus.map((item) => getMenuPricing(item, menuPromotions[item.id])),
+    [menuPromotions, selectedMenus],
+  )
+  const totalAmount = pricedSelectedMenus.reduce((sum, item) => sum + item.price, 0)
+  const discountAmount = pricedSelectedMenus.reduce(
+    (sum, item) => sum + item.discountAmount,
+    0,
+  )
 
   function toggleMenu(menuId: string) {
     setSelectedIds((current) => {
@@ -193,17 +233,30 @@ export function DemoPosPage() {
           </div>
 
           <div className="demo-pos__menus">
-            {demoMenus.map((menu) => (
-              <button
-                className={selectedIds.includes(menu.id) ? 'selected' : ''}
-                key={menu.id}
-                type="button"
-                onClick={() => toggleMenu(menu.id)}
-              >
-                <span>{menu.name}</span>
-                <strong>{menu.price.toLocaleString()}원</strong>
-              </button>
-            ))}
+            {demoMenus.map((menu) => {
+              const promotion = menuPromotions[menu.id]
+              const pricing = getMenuPricing(menu, promotion)
+
+              return (
+                <button
+                  className={selectedIds.includes(menu.id) ? 'selected' : ''}
+                  key={menu.id}
+                  type="button"
+                  onClick={() => toggleMenu(menu.id)}
+                >
+                  <span className="demo-pos__menu-name">
+                    <span>{menu.name}</span>
+                    {promotion ? <small>{promotion.discountRate}% 할인 적용</small> : null}
+                  </span>
+                  <strong className="demo-pos__menu-price">
+                    {pricing.originalPrice > pricing.price ? (
+                      <del>{pricing.originalPrice.toLocaleString()}원</del>
+                    ) : null}
+                    <span>{pricing.price.toLocaleString()}원</span>
+                  </strong>
+                </button>
+              )
+            })}
           </div>
 
           <div className="demo-pos__summary">
@@ -211,6 +264,12 @@ export function DemoPosPage() {
               <span>선택 메뉴</span>
               <strong>{selectedMenus.length}개</strong>
             </div>
+            {discountAmount > 0 ? (
+              <div>
+                <span>프로모션 할인</span>
+                <strong>-{discountAmount.toLocaleString()}원</strong>
+              </div>
+            ) : null}
             <div>
               <span>결제 금액</span>
               <strong>{totalAmount.toLocaleString()}원</strong>
@@ -314,4 +373,59 @@ export function DemoPosPage() {
       </section>
     </main>
   )
+}
+
+function getDemoMenuPromotions(recommendations: TimeSaleRecommendation[]) {
+  const activePromotions = recommendations.filter((recommendation) => (
+    recommendation.status === 'scheduled' || recommendation.status === 'active'
+  ))
+
+  return demoMenus.reduce<Record<string, PosPromotion>>((result, menu) => {
+    const promotion = activePromotions.find((recommendation) =>
+      isRecommendationForMenu(recommendation, menu),
+    )
+
+    if (promotion && promotion.discountRate > 0) {
+      result[menu.id] = {
+        title: promotion.title ?? promotion.menu,
+        discountRate: promotion.discountRate,
+      }
+    }
+
+    return result
+  }, {})
+}
+
+function isRecommendationForMenu(
+  recommendation: TimeSaleRecommendation,
+  menu: DemoMenu,
+) {
+  const menuName = normalizeMenuName(menu.name)
+  const recommendationMenu = normalizeMenuName(recommendation.menu)
+  const recommendationTitle = normalizeMenuName(recommendation.title ?? '')
+
+  return (
+    recommendationMenu.includes(menuName) ||
+    menuName.includes(recommendationMenu) ||
+    recommendationTitle.includes(menuName)
+  )
+}
+
+function getMenuPricing(menu: DemoMenu, promotion?: PosPromotion) {
+  const discountRate = promotion?.discountRate ?? 0
+  const price =
+    discountRate > 0
+      ? Math.max(0, Math.round(menu.price * (100 - discountRate) / 100))
+      : menu.price
+
+  return {
+    ...menu,
+    originalPrice: menu.price,
+    price,
+    discountAmount: menu.price - price,
+  }
+}
+
+function normalizeMenuName(value: string) {
+  return value.replace(/\s/g, '').toLowerCase()
 }

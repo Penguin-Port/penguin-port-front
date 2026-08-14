@@ -78,6 +78,11 @@ export interface UpsellHintResponse {
     productId: string
     name: string
     price: number
+    originalPrice?: number | null
+    discountRate?: number | null
+    discountedPrice?: number | null
+    promotionTitle?: string | null
+    promotionEndsAt?: string | null
   }>
 }
 
@@ -89,6 +94,7 @@ export interface RewardOption {
   title: string
   payload: Record<string, unknown>
   recommended: boolean
+  recommendationReason?: string | null
 }
 
 export interface RewardOptionsResponse {
