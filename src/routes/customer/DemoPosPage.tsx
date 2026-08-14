@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import QRCode from 'qrcode'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { adminApi } from '../../api/admin'
 import { posApi } from '../../api/pos'
@@ -31,6 +32,19 @@ type PosPromotion = {
   discountRate: number
 }
 
+interface QrReceipt {
+  connectUrl: string
+  dataUrl: string
+  expiresAt: string
+}
+
+function createCustomerConnectUrl(orderClaim: string) {
+  const baseUrl = env.customerAppUrl.trim() || window.location.origin
+  const connectUrl = new URL('/connect', baseUrl)
+  connectUrl.searchParams.set('orderClaim', orderClaim)
+  return connectUrl.toString()
+}
+
 export function DemoPosPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -46,6 +60,8 @@ export function DemoPosPage() {
   const [menuPromotions, setMenuPromotions] = useState<Record<string, PosPromotion>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [qrReceipt, setQrReceipt] = useState<QrReceipt | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   const canUseApi = env.useCustomerApi && isApiConfigured
 
@@ -95,6 +111,8 @@ export function DemoPosPage() {
 
   async function handleCreateOrder() {
     setErrorMessage('')
+    setQrReceipt(null)
+    setIsCopied(false)
     setIsSubmitting(true)
 
     try {
@@ -102,7 +120,23 @@ export function DemoPosPage() {
       window.sessionStorage.setItem('portalPhone', normalizedPhone)
 
       if (!canUseApi) {
-        navigate(isExtendMode ? '/connect?screen=active' : `/connect?orderClaim=demo-${Date.now()}`)
+        if (isExtendMode) {
+          navigate('/connect?screen=active')
+          return
+        }
+
+        const connectUrl = createCustomerConnectUrl(`demo-${Date.now()}`)
+        const dataUrl = await QRCode.toDataURL(connectUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          width: 320,
+          color: { dark: '#111111', light: '#ffffff' },
+        })
+        setQrReceipt({
+          connectUrl,
+          dataUrl,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        })
         return
       }
 
@@ -138,15 +172,38 @@ export function DemoPosPage() {
         return
       }
 
-      navigate(`/connect?orderClaim=${encodeURIComponent(response.orderClaim.token)}`)
+      const connectUrl = createCustomerConnectUrl(response.orderClaim.token)
+      const dataUrl = await QRCode.toDataURL(connectUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 320,
+        color: { dark: '#111111', light: '#ffffff' },
+      })
+      setQrReceipt({
+        connectUrl,
+        dataUrl,
+        expiresAt: response.orderClaim.expiresAt,
+      })
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : '주문 QR 생성 중 오류가 발생했습니다.',
+          : '주문표 QR 생성 중 오류가 발생했습니다.',
       )
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleCopyLink() {
+    if (!qrReceipt) return
+
+    try {
+      await navigator.clipboard.writeText(qrReceipt.connectUrl)
+      setIsCopied(true)
+      window.setTimeout(() => setIsCopied(false), 2000)
+    } catch {
+      setErrorMessage('링크를 복사하지 못했습니다. 주소를 직접 선택해 복사해주세요.')
     }
   }
 
@@ -171,7 +228,7 @@ export function DemoPosPage() {
             <p>
               {isExtendMode
                 ? '같은 전화번호로 주문하면 백엔드가 기존 이용권 시간을 자동으로 늘립니다.'
-                : 'MVP 시연용 POS 화면입니다. 주문을 생성하면 Customer Portal QR 흐름으로 이동합니다.'}
+                : 'MVP 시연용 POS 화면입니다. 주문을 생성하면 Customer Portal의 QR 흐름으로 이동합니다.'}
             </p>
           </div>
 
@@ -248,20 +305,70 @@ export function DemoPosPage() {
             </div>
           )}
 
-          {errorMessage ? <p className="demo-pos__error">{errorMessage}</p> : null}
+          {qrReceipt ? (
+            <section className="demo-pos__qr-receipt" aria-live="polite">
+              <div className="demo-pos__qr-copy">
+                <span>주문 완료</span>
+                <h2>고객용 QR이 발급됐습니다</h2>
+                <p>고객이 휴대폰 카메라로 QR을 스캔하면 인증 화면으로 이동합니다.</p>
+              </div>
 
-          <button
-            className="demo-pos__submit"
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleCreateOrder}
-          >
-            {isSubmitting
-              ? '주문 처리 중'
-              : isExtendMode
-                ? '추가 주문 완료'
-                : '주문 QR 생성'}
-          </button>
+              <div className="demo-pos__qr-image">
+                <img src={qrReceipt.dataUrl} alt="고객 Wi-Fi 이용권 연결 QR 코드" />
+              </div>
+
+              <div className="demo-pos__qr-meta">
+                <span>QR 만료</span>
+                <strong>
+                  {new Date(qrReceipt.expiresAt).toLocaleString('ko-KR', {
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </strong>
+              </div>
+
+              <label className="demo-pos__qr-link">
+                <span>고객 접속 주소</span>
+                <input readOnly value={qrReceipt.connectUrl} onFocus={(event) => event.target.select()} />
+              </label>
+
+              <div className="demo-pos__qr-actions">
+                <button type="button" onClick={() => void handleCopyLink()}>
+                  {isCopied ? '복사 완료' : '링크 복사'}
+                </button>
+                <a href={qrReceipt.connectUrl} target="_blank" rel="noreferrer">
+                  고객 화면 열기
+                </a>
+              </div>
+
+              <button
+                className="demo-pos__new-order"
+                type="button"
+                onClick={() => setQrReceipt(null)}
+              >
+                새 주문 만들기
+              </button>
+            </section>
+          ) : (
+            <>
+              {errorMessage ? <p className="demo-pos__error">{errorMessage}</p> : null}
+
+              <button
+                className="demo-pos__submit"
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleCreateOrder}
+              >
+                {isSubmitting
+                  ? '주문 처리 중'
+                  : isExtendMode
+                    ? '추가 주문 완료'
+                    : '주문표 QR 생성'}
+              </button>
+            </>
+          )}
         </div>
       </section>
     </main>
