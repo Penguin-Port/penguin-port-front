@@ -121,6 +121,7 @@ export function CustomerPortalPage() {
   const [couponError, setCouponError] = useState('')
   const [isCouponLoading, setIsCouponLoading] = useState(false)
   const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
+  const [syncNotice, setSyncNotice] = useState('')
   const [privacyNotice, setPrivacyNotice] =
     useState<PrivacyNoticeResponse>(fallbackPrivacyNotice)
 
@@ -251,6 +252,7 @@ export function CustomerPortalPage() {
     if (screen !== 'active' || !passId) return
 
     let isCanceled = false
+    let previousPass: CustomerPass | null = activePass
 
     const refreshPass = async () => {
       const savedSession = window.sessionStorage.getItem('portalSession')
@@ -262,6 +264,20 @@ export function CustomerPortalPage() {
           portalSession: savedSession,
         })
         if (isCanceled) return
+
+        if (previousPass && response.version > previousPass.version) {
+          const delta = response.remainingSeconds - previousPass.remainingSeconds
+          if (response.status === 'ACTIVE' && delta > 30) {
+            setSyncNotice(`관리자 변경으로 이용 시간이 ${formatDeltaMinutes(delta)} 늘어났습니다.`)
+          } else if (response.status === 'EXPIRED') {
+            setSyncNotice('관리자 변경으로 이용권이 종료되었습니다.')
+          } else if (response.status === 'BLOCKED') {
+            setSyncNotice('관리자 변경으로 이용권 연결을 다시 확인해야 합니다.')
+          } else {
+            setSyncNotice('관리자 변경 사항이 이용권에 반영되었습니다.')
+          }
+        }
+        previousPass = response
 
         setActivePass(response)
         setSecondsLeft(response.remainingSeconds)
@@ -309,13 +325,50 @@ export function CustomerPortalPage() {
     const savedSession = window.sessionStorage.getItem('portalSession')
     if (!savedSession) return
 
-    customerPortalService
-      .getUpsellHint({ portalSession: savedSession })
-      .then(setUpsellHint)
-      .catch(() => {
+    let isCanceled = false
+
+    const refreshCustomerContext = async () => {
+      const [upsellResult, couponResult] = await Promise.allSettled([
+        customerPortalService.getUpsellHint({ portalSession: savedSession }),
+        customerPortalService.listCoupons({ portalSession: savedSession }),
+      ])
+      if (isCanceled) return
+
+      if (upsellResult.status === 'fulfilled') {
+        setUpsellHint(upsellResult.value)
+      } else {
         setUpsellHint(null)
-      })
+      }
+
+      if (couponResult.status === 'fulfilled') {
+        const couponResponse = couponResult.value
+        if (isCanceled) return
+        setCoupons(couponResponse)
+        setCouponCount(couponResponse.filter((coupon) => coupon.status === 'AVAILABLE').length)
+      }
+    }
+
+    void refreshCustomerContext()
+
+    const timer = window.setInterval(() => {
+      void refreshCustomerContext()
+    }, CUSTOMER_CONTEXT_REFRESH_INTERVAL_MS)
+
+    return () => {
+      isCanceled = true
+      window.clearInterval(timer)
+    }
   }, [screen, activePass?.version])
+
+  useEffect(() => {
+    if (!syncNotice) return
+
+    const timer = window.setTimeout(() => {
+      setSyncNotice('')
+    }, 5000)
+
+    return () => window.clearTimeout(timer)
+  }, [syncNotice])
 
   useEffect(() => {
     if (screen !== 'reward') return
@@ -600,6 +653,7 @@ export function CustomerPortalPage() {
             upsellHint={upsellHint}
             rewardCount={rewardGrantIds.length}
             couponCount={couponCount}
+            syncNotice={syncNotice}
             currentTime={now}
             secondsLeft={secondsLeft}
             onReward={() => goToScreen('reward')}
@@ -883,6 +937,7 @@ function ActiveScreen({
   upsellHint,
   rewardCount,
   couponCount,
+  syncNotice,
   currentTime,
   secondsLeft,
   onReward,
@@ -894,6 +949,7 @@ function ActiveScreen({
   upsellHint: UpsellHintResponse | null
   rewardCount: number
   couponCount: number
+  syncNotice: string
   currentTime: Date
   secondsLeft: number
   onReward: () => void
@@ -933,6 +989,7 @@ function ActiveScreen({
       <p className="timer-label">남은 이용 시간</p>
       <p className="timer-large">{formatRemaining(secondsLeft)}</p>
       <p className="caption">{endTimeLabel} 까지 · 매장 시간 기준</p>
+      {syncNotice && <p className="sync-notice">{syncNotice}</p>}
       <section className="progress-card">
         <div className="amount-line">
           <span>오늘 누적 구매액</span>
@@ -1549,6 +1606,7 @@ function readStoredRewardGrantIds() {
 }
 
 const PASS_REFRESH_INTERVAL_MS = 10_000
+const CUSTOMER_CONTEXT_REFRESH_INTERVAL_MS = 15_000
 
 function getPolicySummaryRows(pass: CustomerPass | null): [string, string][] {
   const snapshot = getPolicySnapshot(pass)
@@ -1805,6 +1863,10 @@ function formatMinutes(totalMinutes: number) {
   if (hours) return `${hours}시간`
 
   return `${minutes}분`
+}
+
+function formatDeltaMinutes(totalSeconds: number) {
+  return formatMinutes(Math.max(1, Math.round(totalSeconds / 60)))
 }
 
 function formatRemaining(totalSeconds: number) {
