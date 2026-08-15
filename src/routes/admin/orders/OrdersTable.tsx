@@ -23,7 +23,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
           ))}
         </tbody>
       </table>
-      {orders.length === 0 && <p className="orders-empty">조건에 해당하는 주문이 없습니다.</p>}
     </div>
   )
 }

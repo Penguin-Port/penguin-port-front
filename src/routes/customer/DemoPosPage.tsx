@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { adminApi } from '../../api/admin'
+import { customerApi } from '../../api/customer'
+import { ApiError } from '../../api/client'
 import { posApi } from '../../api/pos'
 import { env, isApiConfigured } from '../../config/env'
 import type { TimeSaleRecommendation } from '../../types/admin'
@@ -54,10 +56,13 @@ export function DemoPosPage() {
   )
   const [storeId, setStoreId] = useState(env.demoStoreId)
   const [productId, setProductId] = useState(env.demoProductId)
+  const [menus, setMenus] = useState<DemoMenu[]>(demoMenus)
+  const [hasApiCatalog, setHasApiCatalog] = useState(false)
   const [phone, setPhone] = useState(
     window.sessionStorage.getItem('portalPhone') ?? '01011111111',
   )
   const [menuPromotions, setMenuPromotions] = useState<Record<string, PosPromotion>>({})
+  const [policyMinutes, setPolicyMinutes] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [qrReceipt, setQrReceipt] = useState<QrReceipt | null>(null)
@@ -74,7 +79,7 @@ export function DemoPosPage() {
       .getRecommendations()
       .then((response) => {
         if (isCanceled) return
-        setMenuPromotions(getDemoMenuPromotions(response.data.map(mapApiRecommendation)))
+        setMenuPromotions(getDemoMenuPromotions(response.data.map(mapApiRecommendation), menus))
       })
       .catch(() => {
         if (!isCanceled) setMenuPromotions({})
@@ -83,11 +88,35 @@ export function DemoPosPage() {
     return () => {
       isCanceled = true
     }
-  }, [canUseApi])
+  }, [canUseApi, menus])
+
+  useEffect(() => {
+    if (!canUseApi || !storeId.trim()) return
+
+    let isCanceled = false
+    customerApi.listProducts(storeId.trim()).then((products) => {
+      if (isCanceled || products.length === 0) return
+      const apiMenus = products.map((product) => ({
+        id: product.productId,
+        name: product.name,
+        price: product.price,
+      }))
+      setMenus(apiMenus)
+      setHasApiCatalog(true)
+      setProductId(apiMenus[0].id)
+      setSelectedIds(apiMenus.slice(0, 2).map((menu) => menu.id))
+    }).catch(() => {
+      if (!isCanceled) setHasApiCatalog(false)
+    })
+
+    return () => {
+      isCanceled = true
+    }
+  }, [canUseApi, storeId])
 
   const selectedMenus = useMemo(
-    () => demoMenus.filter((item) => selectedIds.includes(item.id)),
-    [selectedIds],
+    () => menus.filter((item) => selectedIds.includes(item.id)),
+    [menus, selectedIds],
   )
   const pricedSelectedMenus = useMemo(
     () => selectedMenus.map((item) => getMenuPricing(item, menuPromotions[item.id])),
@@ -98,6 +127,24 @@ export function DemoPosPage() {
     (sum, item) => sum + item.discountAmount,
     0,
   )
+
+  useEffect(() => {
+    if (!canUseApi) return
+
+    let isCanceled = false
+    adminApi
+      .simulateWifiPolicy(totalAmount, isExtendMode ? 'ADDITIONAL' : 'FIRST')
+      .then((response) => {
+        if (!isCanceled) setPolicyMinutes(response.data.minutes)
+      })
+      .catch(() => {
+        if (!isCanceled) setPolicyMinutes(null)
+      })
+
+    return () => {
+      isCanceled = true
+    }
+  }, [canUseApi, isExtendMode, totalAmount])
 
   function toggleMenu(menuId: string) {
     setSelectedIds((current) => {
@@ -140,7 +187,7 @@ export function DemoPosPage() {
         return
       }
 
-      if (!storeId.trim() || !productId.trim()) {
+      if (!storeId.trim() || (!hasApiCatalog && !productId.trim())) {
         setErrorMessage('API 모드에서는 seed 결과의 storeId와 productId가 필요합니다.')
         return
       }
@@ -151,13 +198,13 @@ export function DemoPosPage() {
         customer: {
           phone: normalizedPhone,
         },
-        items: [
-          {
-            productId: productId.trim(),
-            quantity: 1,
-            unitPrice: totalAmount,
-          },
-        ],
+        items: hasApiCatalog
+          ? pricedSelectedMenus.map((menu) => ({
+              productId: menu.id,
+              quantity: 1,
+              unitPrice: menu.price,
+            }))
+          : [{ productId: productId.trim(), quantity: 1, unitPrice: totalAmount }],
         totalAmount,
         paidAt: new Date().toISOString(),
       })
@@ -167,7 +214,10 @@ export function DemoPosPage() {
         JSON.stringify(response.newRewardGrantIds),
       )
 
-      if (isExtendMode) {
+      if (
+        isExtendMode
+        && ['ACTIVE', 'EXPIRING_SOON'].includes(response.wifiPass.status)
+      ) {
         navigate('/connect?screen=active')
         return
       }
@@ -186,9 +236,11 @@ export function DemoPosPage() {
       })
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : '주문표 QR 생성 중 오류가 발생했습니다.',
+        error instanceof ApiError && error.status === 409
+          ? '차단된 이용권이 있는 전화번호입니다. 다른 전화번호를 사용하거나 관리자에게 문의해 주세요.'
+          : error instanceof Error
+            ? error.message
+            : '주문표 QR 생성 중 오류가 발생했습니다.',
       )
     } finally {
       setIsSubmitting(false)
@@ -233,7 +285,7 @@ export function DemoPosPage() {
           </div>
 
           <div className="demo-pos__menus">
-            {demoMenus.map((menu) => {
+            {menus.map((menu) => {
               const promotion = menuPromotions[menu.id]
               const pricing = getMenuPricing(menu, promotion)
 
@@ -276,7 +328,13 @@ export function DemoPosPage() {
             </div>
             <div>
               <span>{isExtendMode ? '연장 방식' : '제공 이용권'}</span>
-              <strong>{isExtendMode ? '기존 이용권 자동 연장' : '2시간 기본'}</strong>
+              <strong>
+                {policyMinutes === null
+                  ? '서버 정책에 따라 계산'
+                  : isExtendMode
+                    ? `${policyMinutes}분 자동 연장`
+                    : `총 ${policyMinutes}분 제공`}
+              </strong>
             </div>
           </div>
 
@@ -375,12 +433,15 @@ export function DemoPosPage() {
   )
 }
 
-function getDemoMenuPromotions(recommendations: TimeSaleRecommendation[]) {
+function getDemoMenuPromotions(
+  recommendations: TimeSaleRecommendation[],
+  menus: DemoMenu[],
+) {
   const activePromotions = recommendations.filter((recommendation) => (
     recommendation.status === 'scheduled' || recommendation.status === 'active'
   ))
 
-  return demoMenus.reduce<Record<string, PosPromotion>>((result, menu) => {
+  return menus.reduce<Record<string, PosPromotion>>((result, menu) => {
     const promotion = activePromotions.find((recommendation) =>
       isRecommendationForMenu(recommendation, menu),
     )

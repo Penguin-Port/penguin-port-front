@@ -7,6 +7,7 @@ import {
   type OtpConfirmResponse,
   type OtpSendResponse,
   type PrivacyNoticeResponse,
+  type RewardGrantSummary,
   type RewardChooseResponse,
   type RewardFulfillMode,
   type RewardOptionsResponse,
@@ -46,6 +47,9 @@ export type CustomerPortalService = {
     grantId: string
     portalSession: string
   }): Promise<RewardOptionsResponse>
+  listRewardGrants(input: {
+    portalSession: string
+  }): Promise<RewardGrantSummary[]>
   chooseReward(input: {
     grantId: string
     benefitId: string
@@ -118,6 +122,9 @@ const mockCustomerService: CustomerPortalService = {
         },
       ],
     })
+  },
+  listRewardGrants() {
+    return Promise.resolve([])
   },
   chooseReward({ grantId, benefitId, fulfillMode }) {
     return Promise.resolve({
@@ -193,6 +200,9 @@ const apiCustomerService: CustomerPortalService = {
   },
   getRewardOptions({ grantId, portalSession }) {
     return customerApi.getRewardOptions(grantId, portalSession)
+  },
+  listRewardGrants({ portalSession }) {
+    return customerApi.listRewardGrants(portalSession)
   },
   chooseReward({ grantId, benefitId, fulfillMode, portalSession }) {
     return customerApi.chooseReward(grantId, { benefitId, fulfillMode }, portalSession)

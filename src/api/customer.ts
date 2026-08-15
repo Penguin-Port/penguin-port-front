@@ -17,11 +17,24 @@ export interface OrderClaimExchangeResponse {
   requiresVerification: boolean
   passId: string | null
   expiresIn: number
+  storeId: string
   storeName: string
   orderNo: string
   items: CustomerOrderItem[]
   paidAmount: number
   providedMinutes: number
+}
+
+export interface PublicProduct {
+  productId: string
+  name: string
+  price: number
+}
+
+export interface RewardGrantSummary {
+  grantId: string
+  status: string
+  businessDate: string
 }
 
 export interface OtpSendRequest {
@@ -151,6 +164,10 @@ function portalSessionHeaders(portalSession: string) {
 }
 
 export const customerApi = {
+  listProducts(storeId: string) {
+    return apiDataRequest<PublicProduct[]>(`/public/stores/${storeId}/products`)
+  },
+
   exchangeOrderClaim(body: OrderClaimExchangeRequest) {
     return apiDataRequest<OrderClaimExchangeResponse>('/public/order-claims/exchange', {
       method: 'POST',
@@ -198,6 +215,12 @@ export const customerApi = {
         headers: portalSessionHeaders(portalSession),
       },
     )
+  },
+
+  listRewardGrants(portalSession: string) {
+    return apiDataRequest<RewardGrantSummary[]>('/public/rewards/grants', {
+      headers: portalSessionHeaders(portalSession),
+    })
   },
 
   chooseReward(
