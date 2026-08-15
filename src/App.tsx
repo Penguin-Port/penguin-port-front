@@ -26,7 +26,7 @@ import { DemoPosPage } from './routes/customer/DemoPosPage'
 function App() {
   const showAdmin = env.appMode !== 'customer'
   const showCustomer = env.appMode !== 'admin'
-  const fallbackPath = env.appMode === 'customer' ? '/connect' : ADMIN_ROUTES.dashboard
+  const fallbackPath = env.appMode === 'customer' ? '/app/demo-pos' : ADMIN_ROUTES.dashboard
 
   return (
     <Routes>

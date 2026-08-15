@@ -15,6 +15,7 @@ export const portalDemo = {
 
 export const defaultPortalOrder: PortalOrder = {
   orderClaim: 'mock-order-claim',
+  storeId: '',
   storeName: portalDemo.storeName,
   orderNo: portalDemo.orderNo,
   items: [

@@ -1,6 +1,7 @@
 import { env } from '../config/env'
 import type {
   AdminLoginResponse,
+  AdminOrderResponse,
   AdminPassResponse,
   AiRecommendationResponse,
   AuditLogResponse,
@@ -105,6 +106,10 @@ export const adminApi = {
 
   async getActivePasses(signal?: AbortSignal) {
     return authenticatedRequest<AdminPassResponse[]>('/admin/passes/active', { signal })
+  },
+
+  async getOrders(signal?: AbortSignal) {
+    return authenticatedRequest<AdminOrderResponse[]>('/admin/orders', { signal })
   },
 
   async extendPass(passId: string, minutes: number) {
