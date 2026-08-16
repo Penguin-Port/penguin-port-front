@@ -12,4 +12,5 @@ export const REWARD_HISTORY_STATUS_LABELS = {
   used: 'USED',
   saved: 'SAVED',
   expired: 'EXPIRED',
+  pending: 'PENDING',
 } as const

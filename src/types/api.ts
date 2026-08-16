@@ -168,6 +168,15 @@ export interface RewardTierUpsertInput {
   }>
 }
 
+export interface AdminRewardHistoryResponse {
+  rewardGrantId: string
+  tierAmount: number
+  benefitTitle: string | null
+  fulfillMode: 'IMMEDIATE' | 'COUPON_7D' | null
+  status: string
+  occurredAt: string | null
+}
+
 export interface PolicyTierResponse {
   minAmount: number
   minutes: number

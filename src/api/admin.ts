@@ -1,6 +1,7 @@
 import { env } from '../config/env'
 import type {
   AdminLoginResponse,
+  AdminRewardHistoryResponse,
   AdminPassResponse,
   AiRecommendationResponse,
   AuditLogResponse,
@@ -163,6 +164,10 @@ export const adminApi = {
 
   async getRewardTiers(signal?: AbortSignal) {
     return authenticatedRequest<RewardTierResponse[]>('/admin/rewards/tiers', { signal })
+  },
+
+  async getRewardHistory(signal?: AbortSignal) {
+    return authenticatedRequest<AdminRewardHistoryResponse[]>('/admin/rewards/history', { signal })
   },
 
   async saveRewardTier(input: RewardTierUpsertInput) {
