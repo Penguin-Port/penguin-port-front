@@ -436,6 +436,7 @@ h1 { margin: 0; font-size: clamp(27px, 2.4vw, 35px); letter-spacing: -1.6px; lin
 .reward-history-status { display: block; width: 100%; padding: 6px 10px; color: #fff; border-radius: 999px; background: var(--pink); font: 700 9px 'DM Sans', sans-serif; }
 .reward-history-status.saved { color: #3765d8; background: #dce9ff; }
 .reward-history-status.expired { color: #81858d; background: #e7e8ea; }
+.reward-history-status.pending { color: #8b6716; background: #fff0be; }
 
 /* Orders */
 .orders-heading { max-width: 1380px; margin: 0 auto 22px; }

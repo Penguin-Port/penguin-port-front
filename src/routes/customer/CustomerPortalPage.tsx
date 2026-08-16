@@ -20,6 +20,7 @@ import type {
   UpsellHintResponse,
 } from '../../api/customer'
 import { ApiError } from '../../api/client'
+import { ConfirmModal } from '../../components/admin'
 import { env } from '../../config/env'
 import '../../styles/customer.css'
 
@@ -119,6 +120,9 @@ export function CustomerPortalPage() {
   const [couponCount, setCouponCount] = useState(0)
   const [coupons, setCoupons] = useState<CustomerCoupon[]>([])
   const [couponError, setCouponError] = useState('')
+  const [couponNotice, setCouponNotice] = useState('')
+  const [couponRedeemTargetId, setCouponRedeemTargetId] = useState<string | null>(null)
+  const [isCouponRedeeming, setIsCouponRedeeming] = useState(false)
   const [isCouponLoading, setIsCouponLoading] = useState(false)
   const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
   const [syncNotice, setSyncNotice] = useState('')
@@ -584,6 +588,7 @@ export function CustomerPortalPage() {
     if (!savedSession) return
 
     try {
+      setIsCouponRedeeming(true)
       const response = await customerPortalService.redeemCoupon({
         couponId,
         portalSession: savedSession,
@@ -602,8 +607,12 @@ export function CustomerPortalPage() {
       )
       setCouponCount((count) => Math.max(0, count - 1))
       setCouponError('')
+      setCouponNotice('쿠폰이 사용되었습니다.')
+      setCouponRedeemTargetId(null)
     } catch (error) {
       setCouponError(getErrorMessage(error))
+    } finally {
+      setIsCouponRedeeming(false)
     }
   }
 
@@ -697,8 +706,13 @@ export function CustomerPortalPage() {
             coupons={coupons}
             couponCount={couponCount}
             errorMessage={couponError}
+            noticeMessage={couponNotice}
             isLoading={isCouponLoading}
-            onRedeemCoupon={handleRedeemCoupon}
+            onRedeemCoupon={(couponId) => {
+              setCouponNotice('')
+              setCouponError('')
+              setCouponRedeemTargetId(couponId)
+            }}
           />
         )}
         {screen === 'extend' && (
@@ -736,6 +750,20 @@ export function CustomerPortalPage() {
           />
         )}
       </section>
+      <ConfirmModal
+        isOpen={couponRedeemTargetId !== null}
+        title="쿠폰을 사용하시겠습니까?"
+        description="사용한 쿠폰은 취소하거나 다시 사용할 수 없습니다. 매장 직원에게 화면을 보여준 뒤 사용해 주세요."
+        confirmLabel="쿠폰 사용"
+        cancelLabel="취소"
+        isPending={isCouponRedeeming}
+        onClose={() => {
+          if (!isCouponRedeeming) setCouponRedeemTargetId(null)
+        }}
+        onConfirm={() => {
+          if (couponRedeemTargetId) void handleRedeemCoupon(couponRedeemTargetId)
+        }}
+      />
     </main>
   )
 }
@@ -1129,12 +1157,14 @@ function CouponsScreen({
   coupons,
   couponCount,
   errorMessage,
+  noticeMessage,
   isLoading,
   onRedeemCoupon,
 }: {
   coupons: CustomerCoupon[]
   couponCount: number
   errorMessage: string
+  noticeMessage: string
   isLoading: boolean
   onRedeemCoupon: (couponId: string) => void
 }) {
@@ -1142,6 +1172,7 @@ function CouponsScreen({
     <PortalScreen eyebrow="COUPONS">
       <h1>쿠폰함 {couponCount}장</h1>
       <p className="screen-copy">저장한 쿠폰은 7일 이내에 사용할 수 있습니다.</p>
+      {noticeMessage && <p className="success-text" role="status">{noticeMessage}</p>}
       {isLoading && coupons.length === 0 ? (
         <section className="notice-panel">
           <strong>쿠폰을 불러오는 중입니다</strong>

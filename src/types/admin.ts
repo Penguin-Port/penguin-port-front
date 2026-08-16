@@ -115,7 +115,7 @@ export interface RewardTier {
   benefits: RewardBenefit[]
 }
 
-export type RewardHistoryStatus = 'used' | 'saved' | 'expired'
+export type RewardHistoryStatus = 'used' | 'saved' | 'expired' | 'pending'
 
 export interface RewardHistoryItem {
   id: string
