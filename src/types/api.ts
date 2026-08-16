@@ -221,3 +221,23 @@ export interface AuditLogResponse {
   metadata: Record<string, unknown>
   createdAt: string | null
 }
+
+export interface AdminOrderResponse {
+  orderId: string
+  externalOrderId: string
+  status: string
+  totalAmount: number
+  refundedAmount: number
+  businessDate: string
+  paidAt: string
+  phoneLast4: string | null
+  wifiMinutes: number
+  wifiPassStatus: string | null
+  rewardStatus: string | null
+  items: Array<{
+    productId: string
+    name: string
+    quantity: number
+    unitPrice: number
+  }>
+}

@@ -33,6 +33,7 @@ export type PortalOrderItem = {
 
 export type PortalOrder = {
   orderClaim: string
+  storeId: string
   storeName: string
   orderNo: string
   items: PortalOrderItem[]

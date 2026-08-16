@@ -201,6 +201,7 @@ export function CustomerPortalPage() {
 
         setPortalOrder({
           orderClaim: claimForDemo,
+          storeId: response.storeId,
           storeName: getCleanText(response.storeName, portalDemo.storeName),
           orderNo: response.orderNo,
           items: response.items.map((item) => ({
@@ -350,6 +351,19 @@ export function CustomerPortalPage() {
         setCoupons(couponResponse)
         setCouponCount(couponResponse.filter((coupon) => coupon.status === 'AVAILABLE').length)
       }
+
+      try {
+        const grants = await customerPortalService.listRewardGrants({
+          portalSession: savedSession,
+        })
+        if (!isCanceled) {
+          const grantIds = grants.map((grant) => grant.grantId)
+          setRewardGrantIds(grantIds)
+          window.sessionStorage.setItem('portalRewardGrantIds', JSON.stringify(grantIds))
+        }
+      } catch {
+        if (!isCanceled) setRewardGrantIds([])
+      }
     }
 
     void refreshCustomerContext()
@@ -424,7 +438,7 @@ export function CustomerPortalPage() {
   useEffect(() => {
     if (screen !== 'privacy') return
 
-    const storeId = env.demoStoreId
+    const storeId = portalOrder.storeId || env.demoStoreId
     if (!storeId) {
       setPrivacyNotice(fallbackPrivacyNotice)
       return
@@ -438,7 +452,7 @@ export function CustomerPortalPage() {
       .catch(() => {
         setPrivacyNotice(fallbackPrivacyNotice)
       })
-  }, [screen])
+  }, [portalOrder.storeId, screen])
 
   const canSendOtp =
     guestPhone.length === 11 && cooldownSeconds === 0 && !isOtpSubmitting
@@ -677,7 +691,9 @@ export function CustomerPortalPage() {
             rewardOptions={
               availableRewardOptions.length > 0
                 ? availableRewardOptions
-                : fallbackRewardOptions
+                : env.useCustomerApi
+                  ? []
+                  : fallbackRewardOptions
             }
             selectedRewardId={selectedRewardId}
             onSelectReward={setSelectedRewardId}
@@ -988,8 +1004,8 @@ function ActiveScreen({
   const status = getEffectivePassStatus(pass?.status ?? 'ACTIVE', secondsLeft)
   const policySummaryRows = getPolicySummaryRows(pass)
   const bonusMinutes = getPolicyBonusMinutes(pass)
-  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? portalDemo.dailyTotal
-  const nextTierAmount = upsellHint ? upsellHint.nextTierAmount : portalDemo.nextTierAmount
+  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? (env.useCustomerApi ? 0 : portalDemo.dailyTotal)
+  const nextTierAmount = upsellHint ? upsellHint.nextTierAmount : (env.useCustomerApi ? null : portalDemo.nextTierAmount)
   const remainingAmount =
     upsellHint?.remainingAmountToNextTier ??
     (nextTierAmount ? Math.max(0, nextTierAmount - dailyTotal) : 0)
@@ -1199,11 +1215,11 @@ function ExtendScreen({
   onAdditionalOrder: () => void
 }) {
   const tierRows = getPolicyTierRows(pass)
-  const nextTierAmount = upsellHint ? upsellHint.nextTierAmount : portalDemo.nextTierAmount
+  const nextTierAmount = upsellHint ? upsellHint.nextTierAmount : (env.useCustomerApi ? null : portalDemo.nextTierAmount)
   const remainingAmount =
     upsellHint?.remainingAmountToNextTier ??
     (nextTierAmount
-      ? Math.max(0, nextTierAmount - (upsellHint?.dailyTotal ?? portalDemo.dailyTotal))
+      ? Math.max(0, nextTierAmount - (upsellHint?.dailyTotal ?? (env.useCustomerApi ? 0 : portalDemo.dailyTotal)))
       : 0)
   const benefitsPreview =
     upsellHint?.nextTierBenefitsPreview?.map(formatBenefitLabel).join(' · ') ??
@@ -1275,8 +1291,8 @@ function ExpiredScreen({
   onExtend: () => void
   onCoupons: () => void
 }) {
-  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? portalDemo.dailyTotal
-  const remainingAmount = upsellHint?.remainingAmountToNextTier ?? portalDemo.remainingToReward
+  const dailyTotal = upsellHint?.dailyTotal ?? pass?.dailyTotal ?? (env.useCustomerApi ? 0 : portalDemo.dailyTotal)
+  const remainingAmount = upsellHint?.remainingAmountToNextTier ?? (env.useCustomerApi ? 0 : portalDemo.remainingToReward)
   const benefitsPreview =
     upsellHint?.nextTierBenefitsPreview?.map(formatBenefitLabel).join(' · ') ??
     '다음 리워드'
@@ -1654,7 +1670,7 @@ function getPolicySummaryRows(pass: CustomerPass | null): [string, string][] {
   if (amount !== null) rows.push(['정책 적용 금액', formatWon(amount)])
   if (orderType) rows.push(['주문 구분', getOrderTypeLabel(orderType)])
 
-  return rows.length > 0
+  return rows.length > 0 || env.useCustomerApi
     ? rows
     : [
         ['기본 제공 시간', formatMinutes(portalDemo.baseMinutes)],
@@ -1684,6 +1700,8 @@ function getPolicyTierRows(pass: CustomerPass | null): PolicyTier[] {
     if (normalizedTiers.length > 0) return normalizedTiers
   }
 
+  if (env.useCustomerApi) return []
+
   return [
     {
       minAmount: portalDemo.paidAmount,
@@ -1711,6 +1729,8 @@ function getSuggestedItems(upsellHint: UpsellHintResponse | null): MenuItem[] {
       promotionEndsAt: item.promotionEndsAt ?? undefined,
     }))
   }
+
+  if (env.useCustomerApi) return []
 
   return recommendedItems.map((item) => ({
     ...item,

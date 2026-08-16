@@ -42,7 +42,11 @@ export function AdminTimeSalesPage() {
     if (showLoading) setIsLoading(true)
     try {
       const response = await adminApi.getRecommendations(signal)
-      setRecommendations(response.data.map(mapApiRecommendation))
+      setRecommendations(
+        response.data
+          .filter((item) => item.type === 'TIME_SALE')
+          .map(mapApiRecommendation),
+      )
       setErrorMessage('')
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
@@ -64,7 +68,9 @@ export function AdminTimeSalesPage() {
     setIsGenerating(true)
     try {
       const response = await adminApi.generateRecommendations('TIME_SALE')
-      const generated = response.data.map(mapApiRecommendation)
+      const generated = response.data
+        .filter((item) => item.type === 'TIME_SALE')
+        .map(mapApiRecommendation)
       const generatedIds = new Set(generated.map((item) => item.id))
       setRecommendations((current) => [
         ...generated,

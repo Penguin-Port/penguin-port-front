@@ -20,6 +20,7 @@ export async function exchangeOrderClaimMock(
     requiresVerification: true,
     passId: `mock-pass-${portalOrder.orderClaim}`,
     expiresIn: 600,
+    storeId: portalOrder.storeId,
     storeName: portalOrder.storeName,
     orderNo: portalOrder.orderNo,
     items: portalOrder.items,
