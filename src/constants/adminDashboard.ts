@@ -9,7 +9,7 @@ export const DASHBOARD_METRICS: DashboardMetric[] = [
   { id: 'active-passes', label: '활성 이용권', value: '128장', detail: '전일 대비 +12장', tone: 'blue', path: ADMIN_ROUTES.livePasses },
   { id: 'sales', label: '오늘 매출', value: '2,840,000원', detail: '어제 대비 23% 증가', tone: 'green', path: ADMIN_ROUTES.aiSales },
   { id: 'rewards', label: '리워드 달성', value: '24건', detail: '오늘 발행 · 18건 선택 완료', tone: 'purple', path: ADMIN_ROUTES.rewardHistory },
-  { id: 'approvals', label: '승인 대기', value: '6건', detail: 'AI 제안 검토가 필요해요', tone: 'orange', path: ADMIN_ROUTES.aiTimeSales },
+  { id: 'approvals', label: '타임세일 승인 대기', value: '2건', detail: '타임세일 제안 검토가 필요해요', tone: 'orange', path: ADMIN_ROUTES.aiTimeSales },
 ]
 
 export const DASHBOARD_ACTIVITIES: DashboardActivity[] = [

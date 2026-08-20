@@ -104,6 +104,12 @@ export function AdminDashboardPage() {
     )),
     [data],
   )
+  const pendingTimeSaleRecommendations = useMemo(
+    () => pendingRecommendations.filter((recommendation) => (
+      (recommendation.recommendationType?.toUpperCase() ?? 'TIME_SALE') === 'TIME_SALE'
+    )),
+    [pendingRecommendations],
+  )
   const approvals = useMemo(
     () => isApiConnected ? createApprovalItems(pendingRecommendations) : DASHBOARD_APPROVALS,
     [isApiConnected, pendingRecommendations],
@@ -124,10 +130,11 @@ export function AdminDashboardPage() {
     if (error) return { ...metric, value: '-', detail: '추천 조회 상태를 확인해주세요' }
     return {
       ...metric,
-      value: `${pendingRecommendations.length}건`,
-      detail: pendingRecommendations.length > 0 ? 'AI 제안 검토가 필요해요' : '모든 AI 추천을 검토했어요',
+      label: '타임세일 승인 대기',
+      value: `${pendingTimeSaleRecommendations.length}건`,
+      detail: pendingTimeSaleRecommendations.length > 0 ? '타임세일 제안 검토가 필요해요' : '모든 타임세일 추천을 검토했어요',
     }
-  }), [error, isApiConnected, isLoading, overview, pendingRecommendations.length])
+  }), [error, isApiConnected, isLoading, overview, pendingTimeSaleRecommendations.length])
   const latestRecommendation = pendingRecommendations[0] ?? null
   const updatedAt = serverTime ? new Date(serverTime) : new Date()
 
