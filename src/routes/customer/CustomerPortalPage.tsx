@@ -125,6 +125,7 @@ export function CustomerPortalPage() {
   const [isCouponRedeeming, setIsCouponRedeeming] = useState(false)
   const [isCouponLoading, setIsCouponLoading] = useState(false)
   const [lastPortalError, setLastPortalError] = useState<PortalErrorInfo | null>(null)
+  const [claimExchangeAttempt, setClaimExchangeAttempt] = useState(0)
   const [syncNotice, setSyncNotice] = useState('')
   const [privacyNotice, setPrivacyNotice] =
     useState<PrivacyNoticeResponse>(fallbackPrivacyNotice)
@@ -153,6 +154,17 @@ export function CustomerPortalPage() {
     },
     [isConnectRoute, location.pathname, navigate, orderClaim],
   )
+
+  const retryClaimExchange = useCallback(() => {
+    if (!orderClaim) {
+      goToScreen('claimMissing', { replace: true })
+      return
+    }
+
+    setLastPortalError(null)
+    setClaimExchangeAttempt((attempt) => attempt + 1)
+    goToScreen('qr', { replace: true })
+  }, [goToScreen, orderClaim])
 
   useEffect(() => {
     if (!isConnectRoute) return
@@ -199,6 +211,7 @@ export function CustomerPortalPage() {
       .then((response) => {
         if (isCanceled) return
 
+        setLastPortalError(null)
         setPortalOrder({
           orderClaim: claimForDemo,
           storeId: response.storeId,
@@ -224,13 +237,13 @@ export function CustomerPortalPage() {
           return
         }
 
-        goToScreen('error', { replace: true, clearOrderClaim: true })
+        goToScreen('error', { replace: true })
       })
 
     return () => {
       isCanceled = true
     }
-  }, [goToScreen, isConnectRoute, orderClaim])
+  }, [claimExchangeAttempt, goToScreen, isConnectRoute, orderClaim])
 
   useEffect(() => {
     if (cooldownSeconds === 0) return
@@ -740,7 +753,7 @@ export function CustomerPortalPage() {
         {screen === 'error' && (
           <ErrorScreen
             errorInfo={lastPortalError}
-            onRetry={() => goToScreen('active')}
+            onRetry={retryClaimExchange}
           />
         )}
         {screen === 'privacy' && (
