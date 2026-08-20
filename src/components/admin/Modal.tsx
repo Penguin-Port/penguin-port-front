@@ -12,6 +12,11 @@ interface ModalProps {
 export function Modal({ isOpen, title, description, children, onClose }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!isOpen) return
@@ -23,7 +28,7 @@ export function Modal({ isOpen, title, description, children, onClose }: ModalPr
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !dialogRef.current) return
@@ -49,7 +54,7 @@ export function Modal({ isOpen, title, description, children, onClose }: ModalPr
       document.body.style.overflow = previousOverflow
       previousFocus?.focus()
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   if (!isOpen) return null
 
