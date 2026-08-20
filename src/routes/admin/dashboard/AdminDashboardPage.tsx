@@ -42,13 +42,17 @@ function getRecommendationGroup(recommendation: TimeSaleRecommendation) {
   if (type.includes('MENU') || type.includes('TREND')) {
     return { key: 'menu-trend', label: 'AI 신메뉴 트렌드', path: ADMIN_ROUTES.aiMenuTrends }
   }
-  return { key: 'time-sale', label: 'AI 타임세일 추천', path: ADMIN_ROUTES.aiTimeSales }
+  if (type === 'TIME_SALE') {
+    return { key: 'time-sale', label: 'AI 타임세일 추천', path: ADMIN_ROUTES.aiTimeSales }
+  }
+  return null
 }
 
 function createApprovalItems(recommendations: TimeSaleRecommendation[]) {
   const grouped = new Map<string, DashboardApproval>()
   recommendations.forEach((recommendation) => {
     const group = getRecommendationGroup(recommendation)
+    if (!group) return
     const current = grouped.get(group.key)
     grouped.set(group.key, {
       id: group.key,
